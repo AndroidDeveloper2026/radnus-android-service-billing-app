@@ -106,6 +106,8 @@ import JobDetailScreen from '../screens/jobsheet/JobDetailScreen';
 import ReportsScreen from '../screens/reports/ReportsScreen';
 import AdminScreens from '../screens/admin/AdminScreens';
 import LoginScreen from '../screens/auth/LoginScreen';
+import EstimateBillScreen from '../screens/jobsheet/EstimateBillScreen';
+import InvoiceBillScreen from '../screens/jobsheet/InvoiceBillScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -116,6 +118,8 @@ function JobSheetStack() {
       <Stack.Screen name="SearchJobSheet" component={SearchJobSheetScreen} />
       <Stack.Screen name="JobSheetForm" component={JobSheetFormScreen} />
       <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+      <Stack.Screen name="EstimateBill" component={EstimateBillScreen} /> 
+      <Stack.Screen name="InvoiceBill" component={InvoiceBillScreen} />
     </Stack.Navigator>
   );
 }

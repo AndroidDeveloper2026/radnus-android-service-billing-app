@@ -1,212 +1,65 @@
-// // // src/screens/home/HomeScreen.js
-// // import React, { useEffect } from 'react';
-// // import { View, Text, StyleSheet, ScrollView } from 'react-native';
-// // import { useDispatch, useSelector } from 'react-redux';
-// // import { fetchJobs } from '../../store/slices/jobSlice';
-// // import { COLORS, SPACING, FONTS } from '../../utils/theme';
-
-// // export default function HomeScreen() {
-// //   const dispatch = useDispatch();
-// //   const { list } = useSelector(state => state.jobs);
-
-// //   useEffect(() => {
-// //     dispatch(fetchJobs({}));
-// //   }, []);
-
-// //   const total = list.length;
-// //   const pending = list.filter(j => j.status === 'Received' || j.status === 'Pending').length;
-// //   const completed = list.filter(j => j.status === 'Delivered').length;
-
-// //   return (
-// //     <ScrollView style={{ flex: 1, backgroundColor: COLORS.lightGray, padding: SPACING.lg }}>
-// //       <View style={{ marginBottom: SPACING.xl }}>
-// //         <Text style={[FONTS.bold, { fontSize: 24, color: COLORS.dark }]}>Radnus 24/7</Text>
-// //         <Text style={[FONTS.regular, { color: COLORS.gray, marginTop: SPACING.xs }]}>Service Billing Software</Text>
-// //       </View>
-// //       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.xl }}>
-// //         <View style={styles.card}>
-// //           <Text style={styles.cardValue}>{total}</Text>
-// //           <Text style={styles.cardLabel}>TOTAL SERVICE JOBS</Text>
-// //         </View>
-// //         <View style={styles.card}>
-// //           <Text style={styles.cardValue}>{pending}</Text>
-// //           <Text style={styles.cardLabel}>PENDING SERVICE</Text>
-// //         </View>
-// //         <View style={styles.card}>
-// //           <Text style={styles.cardValue}>{completed}</Text>
-// //           <Text style={styles.cardLabel}>COMPLETED SERVICE</Text>
-// //         </View>
-// //       </View>
-// //       <Text style={[FONTS.regular, { textAlign: 'center', color: COLORS.gray, marginTop: SPACING.xxl }]}>
-// //         © 2026 RADNUS COMMUNICATION • SERVICE BILLING PLATFORM
-// //       </Text>
-// //     </ScrollView>
-// //   );
-// // }
-
-// // const styles = StyleSheet.create({
-// //   card: {
-// //     flex: 1,
-// //     backgroundColor: COLORS.white,
-// //     borderRadius: 12,
-// //     padding: SPACING.lg,
-// //     marginHorizontal: SPACING.xs,
-// //     alignItems: 'center',
-// //     shadowColor: '#000',
-// //     shadowOffset: { width: 0, height: 2 },
-// //     shadowOpacity: 0.1,
-// //     shadowRadius: 4,
-// //     elevation: 3,
-// //   },
-// //   cardValue: {
-// //     fontSize: 28,
-// //     fontWeight: 'bold',
-// //     color: COLORS.primary,
-// //   },
-// //   cardLabel: {
-// //     fontSize: 12,
-// //     color: COLORS.gray,
-// //     marginTop: SPACING.xs,
-// //     textAlign: 'center',
-// //   },
-// // });
-
-// //==============================
-
-// // src/screens/home/HomeScreen.js
-// import React, { useEffect } from 'react';
-// import { View, Text, ScrollView, StyleSheet } from 'react-native';
-// import { useDispatch, useSelector } from 'react-redux';
-// import { fetchJobs } from '../../store/slices/jobSlice';
-// import { COLORS, SPACING, FONTS, SHADOWS, BORDERS } from '../../utils/theme';
-
-// export default function HomeScreen() {
-//   const dispatch = useDispatch();
-//   const { list } = useSelector(state => state.jobs);
-
-//   useEffect(() => {
-//     dispatch(fetchJobs({}));
-//   }, [dispatch]);
-
-//   const total = list.length;
-//   const pending = list.filter(j => j.status === 'Received' || j.status === 'Pending').length;
-//   const completed = list.filter(j => j.status === 'Delivered').length;
-
-//   return (
-//     <ScrollView style={{ flex: 1, backgroundColor: COLORS.gray50, padding: SPACING.lg }}>
-//       <View style={{ marginBottom: SPACING.xl }}>
-//         <Text style={[FONTS.bold, { fontSize: 28, color: COLORS.gray900 }]}>Welcome Back!</Text>
-//         <Text style={[FONTS.regular, { color: COLORS.gray500, marginTop: SPACING.xs }]}>Here's your service dashboard</Text>
-//       </View>
-
-//       <View style={styles.statsContainer}>
-//         <View style={styles.statCard}>
-//           <Text style={styles.statValue}>{total}</Text>
-//           <Text style={styles.statLabel}>Total Jobs</Text>
-//         </View>
-//         <View style={[styles.statCard, { backgroundColor: COLORS.warning + '10' }]}>
-//           <Text style={[styles.statValue, { color: COLORS.warning }]}>{pending}</Text>
-//           <Text style={styles.statLabel}>Pending</Text>
-//         </View>
-//         <View style={[styles.statCard, { backgroundColor: COLORS.success + '10' }]}>
-//           <Text style={[styles.statValue, { color: COLORS.success }]}>{completed}</Text>
-//           <Text style={styles.statLabel}>Completed</Text>
-//         </View>
-//       </View>
-
-//       <View style={styles.footer}>
-//         <Text style={styles.footerText}>© 2026 RADNUS COMMUNICATION</Text>
-//         <Text style={styles.footerSubtext}>Service Billing Platform</Text>
-//       </View>
-//     </ScrollView>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   statsContainer: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     marginBottom: SPACING.xxxl,
-//   },
-//   statCard: {
-//     flex: 1,
-//     backgroundColor: COLORS.white,
-//     borderRadius: BORDERS.radius.lg,
-//     padding: SPACING.lg,
-//     marginHorizontal: SPACING.xs,
-//     alignItems: 'center',
-//     ...SHADOWS.medium,
-//   },
-//   statValue: {
-//     ...FONTS.bold,
-//     fontSize: 32,
-//     color: COLORS.primary,
-//     marginBottom: SPACING.xs,
-//   },
-//   statLabel: {
-//     ...FONTS.medium,
-//     fontSize: 12,
-//     color: COLORS.gray500,
-//   },
-//   footer: {
-//     alignItems: 'center',
-//     marginTop: SPACING.xxl,
-//     marginBottom: SPACING.lg,
-//   },
-//   footerText: {
-//     ...FONTS.regular,
-//     fontSize: 12,
-//     color: COLORS.gray400,
-//   },
-//   footerSubtext: {
-//     ...FONTS.regular,
-//     fontSize: 10,
-//     color: COLORS.gray300,
-//     marginTop: SPACING.xs,
-//   },
-// });
-
-//=========================
-
 // src/screens/home/HomeScreen.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { ClipboardList, CheckCircle, Clock, PlusCircle, ArrowRight } from 'lucide-react-native';
 import { fetchJobs } from '../../store/slices/jobSlice';
+import { api } from '../../utils/api';
 import { COLORS, SPACING, FONTS, SHADOWS, BORDERS } from '../../utils/theme';
-
-const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const { list } = useSelector(state => state.jobs);
+  
+  const [stats, setStats] = useState({ total: 0, pending: 0, completed: 0 });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStats = async () => {
+    try {
+      const data = await api.getDashboardStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      dispatch(fetchJobs({})).unwrap(),
+      fetchStats(),
+    ]);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     dispatch(fetchJobs({}));
+    fetchStats();
   }, []);
 
-  const total = list.length;
-  const pending = list.filter(j => j.status === 'Received' || j.status === 'Pending').length;
-  const completed = list.filter(j => j.status === 'Delivered').length;
+  // Use stats from API (to match web), fallback to local calculation if API fails
+  const total = stats.total || list.length;
+  const pending = stats.pending || list.filter(j => j.status === 'Received' || j.status === 'Pending').length;
+  const completed = stats.completed || list.filter(j => j.status === 'Delivered').length;
+
   const recentJobs = list.slice(0, 5);
 
-  const StatCard = ({ icon: Icon, title, value, color, gradientColors }) => (
-    <View style={[styles.statCard, { backgroundColor: '#FFFFFF' }]}>
-      <View style={[styles.statIconWrapper, { backgroundColor: color + '10' }]}>
+  const StatCard = ({ icon: Icon, title, value, color, bgColor }) => (
+    <View style={[styles.statCard, { backgroundColor: bgColor }]}>
+      <View style={styles.statIconContainer}>
         <Icon size={28} color={color} />
       </View>
       <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}</Text>
+        <Text style={[styles.statValue, { color }]}>{value}</Text>
         <Text style={styles.statTitle}>{title}</Text>
       </View>
     </View>
@@ -215,14 +68,10 @@ export default function HomeScreen() {
   const RecentJobItem = ({ job }) => {
     const getStatusStyle = (status) => {
       switch (status?.toLowerCase()) {
-        case 'received':
-          return { bg: '#3B82F615', text: '#3B82F6' };
-        case 'delivered':
-          return { bg: '#10B98115', text: '#10B981' };
-        case 'pending':
-          return { bg: '#F59E0B15', text: '#F59E0B' };
-        default:
-          return { bg: '#9CA3AF15', text: '#9CA3AF' };
+        case 'received': return { bg: '#3B82F615', text: '#3B82F6' };
+        case 'delivered': return { bg: '#10B98115', text: '#10B981' };
+        case 'pending': return { bg: '#F59E0B15', text: '#F59E0B' };
+        default: return { bg: '#9CA3AF15', text: '#9CA3AF' };
       }
     };
     const statusStyle = getStatusStyle(job.status);
@@ -248,7 +97,7 @@ export default function HomeScreen() {
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
     >
       {/* Header Section */}
       <View style={styles.header}>
@@ -271,6 +120,7 @@ export default function HomeScreen() {
             title="Total Jobs"
             value={total}
             color={COLORS.primary}
+            bgColor={COLORS.primaryLight}
           />
         </View>
         <View style={styles.statCardWrapper}>
@@ -279,6 +129,7 @@ export default function HomeScreen() {
             title="Pending"
             value={pending}
             color={COLORS.warning}
+            bgColor={COLORS.warning + '10'}
           />
         </View>
         <View style={styles.statCardWrapper}>
@@ -287,6 +138,7 @@ export default function HomeScreen() {
             title="Completed"
             value={completed}
             color={COLORS.success}
+            bgColor={COLORS.success + '10'}
           />
         </View>
       </View>
@@ -335,9 +187,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FC',
   },
-  contentContainer: {
-    paddingBottom: SPACING.xxl,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -377,12 +226,12 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    // flexWrap: 'wrap',
+    flexWrap: 'wrap',
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.lg,
   },
   statCardWrapper: {
-    width: (width - SPACING.lg * 2 - SPACING.md * 2) / 3,
+    flex: 1,
     marginRight: SPACING.md,
   },
   statCard: {
@@ -390,9 +239,9 @@ const styles = StyleSheet.create({
     borderRadius: BORDERS.radius.lg,
     padding: SPACING.md,
     alignItems: 'center',
-    ...SHADOWS.small,
+    // ...SHADOWS.small,
   },
-  statIconWrapper: {
+  statIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,

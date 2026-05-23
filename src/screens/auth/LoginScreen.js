@@ -159,8 +159,8 @@ export default function LoginScreen() {
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>R</Text>
           </View>
-          <Text style={styles.appName}>RADnUS</Text>
-          <Text style={styles.tagline}>Service Billing Software</Text>
+          <Text style={styles.appName}>RADNUS</Text>
+          <Text style={styles.tagline}>Service Billing App</Text>
         </View>
 
         <View style={styles.card}>

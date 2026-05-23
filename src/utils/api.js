@@ -253,6 +253,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Replace with your actual Render backend URL
 const API_BASE_URL = 'https://radnus-billingsoftware-backend.onrender.com';
 
+// const API_BASE_URL = 'https://10.0.0.2:5000';
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
