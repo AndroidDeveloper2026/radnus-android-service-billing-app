@@ -85,6 +85,21 @@ android {
         versionCode 1
         versionName "1.0"
     }
+        flavorDimensions "env"
+    productFlavors { 
+        dev {
+            dimension "env"
+            applicationIdSuffix '.dev'
+            // resValue "string", "com.radnusdistribution.dev", "com.radnusdistribution"
+            versionNameSuffix "-dev"
+        }
+        prod {
+            dimension "env"
+            // applicationIdSuffix '.prod'
+            // resValue "string", "com.radnusdistribution.prod", "com.radnusdistribution"
+            // versionNameSuffix "-prod"
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
