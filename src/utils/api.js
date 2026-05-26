@@ -1,11 +1,7 @@
 // src/utils/api.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Replace with your actual Render backend URL
-const API_BASE_URL = 'https://radnus-billingsoftware-backend.onrender.com';
-
-// const API_BASE_URL = 'https://10.0.0.2:5000';
+import { API_BASE_URL } from '@env'; 
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -244,4 +240,34 @@ export const api = {
   deleteDrawer: async (id) => {
     await apiClient.delete(`/api/drawers/${id}`);
   },
+
+// Add inside the api object in src/utils/api.js
+
+getUsers: async () => {
+  const response = await apiClient.get('/api/users');
+  return response.data;
+},
+
+addUser: async (userData) => {
+  const response = await apiClient.post('/api/users', userData);
+  return response.data;
+},
+
+deleteUser: async (id) => {
+  await apiClient.delete(`/api/users/${id}`);
+},
+
+updateEngineer: async (id, name) => {
+  const response = await apiClient.put(`/api/engineers/${id}`, { name });
+  return response.data;
+},
+
+// Inside src/utils/api.js, add to the api object:
+getUserReport: async (searchTerm = '') => {
+  const params = new URLSearchParams();
+  if (searchTerm) params.append('jobSheetNo', searchTerm);
+  const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
+  return response.data;
+},
+
 };

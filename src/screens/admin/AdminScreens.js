@@ -1,189 +1,448 @@
 // src/screens/admin/AdminScreens.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { Trash2, Plus } from 'lucide-react-native';
-import { 
-  fetchMakes, addMake, deleteMake, 
-  fetchModels, addModel, deleteModel, 
-  fetchFaults, addFault, deleteFault, 
-  fetchDrawers, addDrawer, deleteDrawer, 
-  fetchEngineers, addEngineer, deleteEngineer 
+import { useNavigation } from '@react-navigation/native';
+import { Trash2, Plus, Search, ChevronDown, ChevronUp, Edit2, Users, FileText } from 'lucide-react-native';
+import {
+  fetchMakes, addMake, deleteMake,
+  fetchModels, addModel, deleteModel,
+  fetchFaults, addFault, deleteFault,
+  fetchDrawers, addDrawer, deleteDrawer,
+  fetchEngineers, addEngineer, deleteEngineer, updateEngineer,
 } from '../../store/slices/adminSlice';
-import { Button, SelectModal, SectionCard, LoadingOverlay } from '../../components/UI';
+import { SelectModal, LoadingOverlay } from '../../components/UI';
 import { COLORS, SPACING, FONTS, SHADOWS, BORDERS } from '../../utils/theme';
 import { useToast } from 'react-native-toast-notifications';
+import { useAuth } from '../../context/AuthContext';
+import AddItemModal from './AddItemModal';
+
+const SECTIONS = [
+  { key: 'makes', title: 'Make Master', type: 'make', placeholder: 'Search Make' },
+  { key: 'models', title: 'Model Master', type: 'model', placeholder: 'Search model...' },
+  { key: 'faults', title: 'Fault Master', type: 'fault', placeholder: 'Search fault...' },
+  { key: 'drawers', title: 'Drawer Master', type: 'drawer', placeholder: 'Search drawer...' },
+  { key: 'engineers', title: 'Engineer Master', type: 'engineer', placeholder: 'Search engineer...' },
+];
 
 export default function AdminScreens() {
   const dispatch = useDispatch();
+  const navigation = useNavigation();
   const toast = useToast();
-  const { makes, models, faults, drawers, engineers, loading } = useSelector(state => state.admin);
+  const { user } = useAuth(); // Get current user from AuthContext
+  const { makes, models, faults, drawers, engineers, loading } = useSelector((state) => state.admin);
+
+  const isAdmin = user?.role === 'admin';
+
+  // Collapse/expand state
+  const [expandedSections, setExpandedSections] = useState({
+    makes: true,
+    models: false,
+    faults: false,
+    drawers: false,
+    engineers: false,
+  });
+
+  // Search states
+  const [makeSearch, setMakeSearch] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
+  const [faultSearch, setFaultSearch] = useState('');
+  const [drawerSearch, setDrawerSearch] = useState('');
+  const [engineerSearch, setEngineerSearch] = useState('');
+
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [selectedMakeForModel, setSelectedMakeForModel] = useState('');
   const [selectedMakeId, setSelectedMakeId] = useState('');
 
   useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = () => {
     dispatch(fetchMakes());
     dispatch(fetchModels());
     dispatch(fetchFaults());
     dispatch(fetchDrawers());
     dispatch(fetchEngineers());
-  }, [dispatch]);
+  };
 
-  const handleAddMake = () => {
-    Alert.prompt('Add Make', 'Enter make name', async (name) => {
-      if (name) { await dispatch(addMake(name)); toast.show('Make added', { type: 'success' }); }
+  const toggleSection = (key) => {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const openAddModal = useCallback((type, makeId = null) => {
+    setModalType(type);
+    setSelectedMakeForModel(makeId || '');
+    setModalVisible(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModalVisible(false);
+    setModalType('');
+    setSelectedMakeForModel('');
+  }, []);
+
+  const handleAddSubmit = useCallback(async (inputValue) => {
+    if (!inputValue.trim()) {
+      toast.show('Please enter a name', { type: 'danger' });
+      return false;
+    }
+    if (modalType === 'model' && !selectedMakeForModel) {
+      toast.show('Please select a make first', { type: 'danger' });
+      return false;
+    }
+
+    try {
+      switch (modalType) {
+        case 'make':
+          await dispatch(addMake(inputValue.trim())).unwrap();
+          toast.show('Make added', { type: 'success' });
+          break;
+        case 'model':
+          await dispatch(addModel({ makeId: selectedMakeForModel, name: inputValue.trim() })).unwrap();
+          toast.show('Model added', { type: 'success' });
+          break;
+        case 'fault':
+          await dispatch(addFault(inputValue.trim())).unwrap();
+          toast.show('Fault added', { type: 'success' });
+          break;
+        case 'drawer':
+          await dispatch(addDrawer(inputValue.trim())).unwrap();
+          toast.show('Drawer added', { type: 'success' });
+          break;
+        case 'engineer':
+          await dispatch(addEngineer(inputValue.trim())).unwrap();
+          toast.show('Engineer added', { type: 'success' });
+          break;
+        default:
+          return false;
+      }
+      return true;
+    } catch (error) {
+      toast.show(error.message || 'Failed to add', { type: 'danger' });
+      return false;
+    }
+  }, [dispatch, modalType, selectedMakeForModel, toast]);
+
+  const handleDelete = useCallback((type, id, name) => {
+    Alert.alert(
+      'Delete',
+      `Delete "${name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              switch (type) {
+                case 'make':
+                  await dispatch(deleteMake(id)).unwrap();
+                  toast.show('Make deleted', { type: 'success' });
+                  if (selectedMakeId === id) setSelectedMakeId('');
+                  break;
+                case 'model':
+                  await dispatch(deleteModel(id)).unwrap();
+                  toast.show('Model deleted', { type: 'success' });
+                  break;
+                case 'fault':
+                  await dispatch(deleteFault(id)).unwrap();
+                  toast.show('Fault deleted', { type: 'success' });
+                  break;
+                case 'drawer':
+                  await dispatch(deleteDrawer(id)).unwrap();
+                  toast.show('Drawer deleted', { type: 'success' });
+                  break;
+                case 'engineer':
+                  await dispatch(deleteEngineer(id)).unwrap();
+                  toast.show('Engineer deleted', { type: 'success' });
+                  break;
+              }
+            } catch (error) {
+              toast.show(error.message || 'Failed to delete', { type: 'danger' });
+            }
+          },
+        },
+      ]
+    );
+  }, [dispatch, selectedMakeId, toast]);
+
+  const handleEditEngineer = (id, currentName) => {
+    Alert.prompt('Edit Engineer', 'Enter new name', currentName, async (newName) => {
+      if (newName && newName !== currentName) {
+        try {
+          await dispatch(updateEngineer({ id, name: newName })).unwrap();
+          toast.show('Engineer updated', { type: 'success' });
+          dispatch(fetchEngineers());
+        } catch (error) {
+          toast.show('Update failed', { type: 'danger' });
+        }
+      }
     });
   };
 
-  const handleDeleteMake = (id) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' }, 
-      { text: 'Delete', style: 'destructive', onPress: async () => { await dispatch(deleteMake(id)); toast.show('Deleted', { type: 'success' }); } }
-    ]);
+  // Filtered data
+  const filteredMakes = useMemo(() => {
+    if (!makeSearch) return makes;
+    return makes.filter(m => m.name.toLowerCase().includes(makeSearch.toLowerCase()));
+  }, [makes, makeSearch]);
+
+  const filteredModels = useMemo(() => {
+    let filtered = models;
+    if (selectedMakeId) {
+      filtered = filtered.filter(m => m.makeId === selectedMakeId);
+    }
+    if (modelSearch) {
+      filtered = filtered.filter(m => m.name.toLowerCase().includes(modelSearch.toLowerCase()));
+    }
+    return filtered;
+  }, [models, selectedMakeId, modelSearch]);
+
+  const filteredFaults = useMemo(() => {
+    if (!faultSearch) return faults;
+    return faults.filter(f => f.name.toLowerCase().includes(faultSearch.toLowerCase()));
+  }, [faults, faultSearch]);
+
+  const filteredDrawers = useMemo(() => {
+    if (!drawerSearch) return drawers;
+    return drawers.filter(d => d.name.toLowerCase().includes(drawerSearch.toLowerCase()));
+  }, [drawers, drawerSearch]);
+
+  const filteredEngineers = useMemo(() => {
+    if (!engineerSearch) return engineers;
+    return engineers.filter(e => e.name.toLowerCase().includes(engineerSearch.toLowerCase()));
+  }, [engineers, engineerSearch]);
+
+  // Render item row with edit for engineers
+  const renderItemRow = ({ item, type }) => {
+    const isEngineer = type === 'engineer';
+    return (
+      <View style={styles.listItem}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <View style={styles.actionButtons}>
+          {isEngineer && (
+            <TouchableOpacity onPress={() => handleEditEngineer(item.id, item.name)} style={styles.editButton}>
+              <Edit2 size={18} color={COLORS.info} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => handleDelete(type, item.id, item.name)} style={styles.deleteButton}>
+            <Trash2 size={20} color={COLORS.error} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
-  const handleAddModel = () => {
-    if (!selectedMakeId) { toast.show('Select a make first', { type: 'danger' }); return; }
-    Alert.prompt('Add Model', 'Enter model name', async (name) => {
-      if (name) { await dispatch(addModel({ makeId: selectedMakeId, name })); toast.show('Model added', { type: 'success' }); }
-    });
-  };
+  const renderSection = ({ item: section }) => {
+    const isExpanded = expandedSections[section.key];
+    let data, searchValue, setSearch, addModalType, extraComponent = null;
 
-  const handleDeleteModel = (id) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' }, 
-      { text: 'Delete', style: 'destructive', onPress: async () => { await dispatch(deleteModel(id)); toast.show('Deleted', { type: 'success' }); } }
-    ]);
-  };
+    switch (section.key) {
+      case 'makes':
+        data = filteredMakes;
+        searchValue = makeSearch;
+        setSearch = setMakeSearch;
+        addModalType = 'make';
+        break;
+      case 'models':
+        data = filteredModels;
+        searchValue = modelSearch;
+        setSearch = setModelSearch;
+        addModalType = 'model';
+        extraComponent = (
+          <SelectModal
+            label="Filter by Make"
+            value={selectedMakeId}
+            options={makes}
+            onSelect={setSelectedMakeId}
+            placeholder="All Makes"
+            style={styles.filterSelect}
+          />
+        );
+        break;
+      case 'faults':
+        data = filteredFaults;
+        searchValue = faultSearch;
+        setSearch = setFaultSearch;
+        addModalType = 'fault';
+        break;
+      case 'drawers':
+        data = filteredDrawers;
+        searchValue = drawerSearch;
+        setSearch = setDrawerSearch;
+        addModalType = 'drawer';
+        break;
+      case 'engineers':
+        data = filteredEngineers;
+        searchValue = engineerSearch;
+        setSearch = setEngineerSearch;
+        addModalType = 'engineer';
+        break;
+      default:
+        return null;
+    }
 
-  const handleAddFault = () => {
-    Alert.prompt('Add Fault', 'Enter fault name', async (name) => {
-      if (name) { await dispatch(addFault(name)); toast.show('Fault added', { type: 'success' }); }
-    });
-  };
+    return (
+      <View style={styles.sectionCard}>
+        <TouchableOpacity style={styles.sectionHeader} onPress={() => toggleSection(section.key)}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          {isExpanded ? <ChevronUp size={22} color={COLORS.gray600} /> : <ChevronDown size={22} color={COLORS.gray600} />}
+        </TouchableOpacity>
 
-  const handleDeleteFault = (id) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' }, 
-      { text: 'Delete', style: 'destructive', onPress: async () => { await dispatch(deleteFault(id)); toast.show('Deleted', { type: 'success' }); } }
-    ]);
-  };
-
-  const handleAddDrawer = () => {
-    Alert.prompt('Add Drawer', 'Enter drawer name', async (name) => {
-      if (name) { await dispatch(addDrawer(name)); toast.show('Drawer added', { type: 'success' }); }
-    });
-  };
-
-  const handleDeleteDrawer = (id) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' }, 
-      { text: 'Delete', style: 'destructive', onPress: async () => { await dispatch(deleteDrawer(id)); toast.show('Deleted', { type: 'success' }); } }
-    ]);
-  };
-
-  const handleAddEngineer = () => {
-    Alert.prompt('Add Engineer', 'Enter engineer name', async (name) => {
-      if (name) { await dispatch(addEngineer(name)); toast.show('Engineer added', { type: 'success' }); }
-    });
-  };
-
-  const handleDeleteEngineer = (id) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' }, 
-      { text: 'Delete', style: 'destructive', onPress: async () => { await dispatch(deleteEngineer(id)); toast.show('Deleted', { type: 'success' }); } }
-    ]);
-  };
-
-  const renderItem = (item, onDelete) => (
-    <View style={styles.listItem}>
-      <Text style={styles.itemName}>{item.name}</Text>
-      <TouchableOpacity onPress={() => onDelete(item.id)}>
-        <Trash2 size={20} color={COLORS.error} />
-      </TouchableOpacity>
-    </View>
-  );
-
-  const filteredModels = models.filter(m => m.makeId === selectedMakeId);
-
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.gray50, padding: SPACING.lg }}>
-      {/* Makes */}
-      <SectionCard title="Make Master">
-        <FlatList
-          data={makes}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => renderItem(item, handleDeleteMake)}
-          ListEmptyComponent={<Text style={styles.emptyText}>No makes found</Text>}
-          scrollEnabled={false}
-        />
-        <Button title="Add Make" onPress={handleAddMake} variant="secondary" style={{ marginTop: SPACING.md }} icon={Plus} />
-      </SectionCard>
-
-      {/* Models */}
-      <SectionCard title="Model Master">
-        <SelectModal 
-          label="Select Make" 
-          value={selectedMakeId} 
-          options={makes} 
-          onSelect={setSelectedMakeId} 
-          placeholder="Select a make first"
-        />
-        {selectedMakeId && (
-          <>
+        {isExpanded && (
+          <View style={styles.sectionContent}>
+            <View style={styles.searchContainer}>
+              <Search size={18} color={COLORS.gray400} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={section.placeholder}
+                value={searchValue}
+                onChangeText={setSearch}
+                placeholderTextColor={COLORS.gray400}
+              />
+            </View>
+            {extraComponent}
             <FlatList
-              data={filteredModels}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => renderItem(item, handleDeleteModel)}
-              ListEmptyComponent={<Text style={styles.emptyText}>No models found</Text>}
+              data={data}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => renderItemRow({ item, type: section.type })}
+              ListEmptyComponent={<Text style={styles.emptyText}>No items found</Text>}
               scrollEnabled={false}
             />
-            <Button title="Add Model" onPress={handleAddModel} variant="secondary" style={{ marginTop: SPACING.md }} icon={Plus} />
-          </>
+            <TouchableOpacity style={styles.addButton} onPress={() => openAddModal(addModalType, selectedMakeId)}>
+              <Plus size={18} color={COLORS.white} />
+              <Text style={styles.addButtonText}>Add {section.type === 'make' ? 'Make' : section.type === 'model' ? 'Model' : section.type === 'fault' ? 'Fault' : section.type === 'drawer' ? 'Drawer' : 'Engineer'}</Text>
+            </TouchableOpacity>
+          </View>
         )}
-      </SectionCard>
+      </View>
+    );
+  };
 
-      {/* Faults */}
-      <SectionCard title="Fault Master">
-        <FlatList
-          data={faults}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => renderItem(item, handleDeleteFault)}
-          ListEmptyComponent={<Text style={styles.emptyText}>No faults found</Text>}
-          scrollEnabled={false}
-        />
-        <Button title="Add Fault" onPress={handleAddFault} variant="secondary" style={{ marginTop: SPACING.md }} icon={Plus} />
-      </SectionCard>
+  return (
+    <View style={styles.container}>
+      {/* Admin Navigation Buttons - Only show for admin users */}
+      {isAdmin && (
+        <View style={styles.adminHeader}>
+          <TouchableOpacity style={styles.adminNavButton} onPress={() => navigation.navigate('UserList')}>
+            <Users size={20} color={COLORS.white} />
+            <Text style={styles.adminNavText}>User List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.adminNavButton} onPress={() => navigation.navigate('UserReport')}>
+            <FileText size={20} color={COLORS.white} />
+            <Text style={styles.adminNavText}>User Report</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Drawers */}
-      <SectionCard title="Drawer Master">
-        <FlatList
-          data={drawers}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => renderItem(item, handleDeleteDrawer)}
-          ListEmptyComponent={<Text style={styles.emptyText}>No drawers found</Text>}
-          scrollEnabled={false}
-        />
-        <Button title="Add Drawer" onPress={handleAddDrawer} variant="secondary" style={{ marginTop: SPACING.md }} icon={Plus} />
-      </SectionCard>
+      <FlatList
+        data={SECTIONS}
+        keyExtractor={(item) => item.key}
+        renderItem={renderSection}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+      />
 
-      {/* Engineers */}
-      <SectionCard title="Engineer Master">
-        <FlatList
-          data={engineers}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => renderItem(item, handleDeleteEngineer)}
-          ListEmptyComponent={<Text style={styles.emptyText}>No engineers found</Text>}
-          scrollEnabled={false}
-        />
-        <Button title="Add Engineer" onPress={handleAddEngineer} variant="secondary" style={{ marginTop: SPACING.md }} icon={Plus} />
-      </SectionCard>
-
+      <AddItemModal
+        visible={modalVisible}
+        type={modalType}
+        makes={makes}
+        selectedMakeId={selectedMakeForModel}
+        onSelectMake={setSelectedMakeForModel}
+        onSubmit={handleAddSubmit}
+        onClose={closeModal}
+      />
       <LoadingOverlay visible={loading} />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.gray50,
+  },
+  adminHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+    gap: SPACING.md,
+  },
+  adminNavButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDERS.radius.md,
+    gap: SPACING.sm,
+  },
+  adminNavText: {
+    ...FONTS.medium,
+    fontSize: 14,
+    color: COLORS.white,
+  },
+  listContent: {
+    padding: SPACING.lg,
+    paddingTop: 0,
+  },
+  sectionCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDERS.radius.lg,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.small,
+    overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    backgroundColor: COLORS.white,
+  },
+  sectionTitle: {
+    ...FONTS.bold,
+    fontSize: 16,
+    color: COLORS.gray900,
+  },
+  sectionContent: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.gray100,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.gray50,
+    borderRadius: BORDERS.radius.md,
+    paddingHorizontal: SPACING.md,
+    marginVertical: SPACING.sm,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    ...FONTS.regular,
+    fontSize: 14,
+    color: COLORS.gray900,
+  },
+  filterSelect: {
+    marginVertical: SPACING.sm,
+  },
   listItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -197,11 +456,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.gray700,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  editButton: {
+    padding: SPACING.xs,
+  },
+  deleteButton: {
+    padding: SPACING.xs,
+  },
   emptyText: {
     ...FONTS.regular,
     fontSize: 14,
     color: COLORS.gray400,
     textAlign: 'center',
-    paddingVertical: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: BORDERS.radius.md,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  addButtonText: {
+    ...FONTS.semibold,
+    fontSize: 13,
+    color: COLORS.white,
   },
 });
