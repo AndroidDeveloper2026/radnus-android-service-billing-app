@@ -24,7 +24,7 @@ export default function UserListScreen() {
 
   useEffect(() => {
     dispatch(fetchUsers());
-  }, []);
+  }, [dispatch]);
 
   const handleDelete = (id, username) => {
     Alert.alert(

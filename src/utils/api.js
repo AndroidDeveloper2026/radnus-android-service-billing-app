@@ -42,7 +42,6 @@ const transformJobToFrontend = (job) => ({
   spareCharges: job.service?.spareCharge || 0,
   estimateAmount: parseFloat(job.service?.estimate) || 0,
   paymentMode: job.service?.paymentMode || '',
-  // Store dates as strings (ISO) – serializable
   repairDate: job.service?.repairDate ? job.service.repairDate : new Date().toISOString(),
   deliveredDate: job.service?.deliveryDate || null,
   remarks: job.service?.remarks || '',
@@ -53,39 +52,44 @@ const transformJobToFrontend = (job) => ({
 });
 
 const transformJobToBackend = (jobData, currentUser) => ({
-  jobSheetNo: jobData.jobNo,
+  jobSheetNo: jobData.jobNo || '',
   customer: {
-    name: jobData.customerName,
-    contact: jobData.contact,
-    altContact: jobData.altContact,
-    address: jobData.address,
-    email: jobData.email,
+    name: jobData.customerName || '',
+    contact: jobData.contact || '',
+    altContact: jobData.altContact || '',
+    address: jobData.address || '',
+    email: jobData.email || '',
   },
   device: {
-    make: jobData.makeId,
-    model: jobData.modelId,
-    imei: jobData.imei,
-    warranty: jobData.warranty,
-    pattern: jobData.patternPin,
-    mobileStatus: jobData.status,
+    make: jobData.makeId || '',
+    model: jobData.modelId || '',
+    imei: jobData.imei || '',
+    warranty: jobData.warranty || 'No Warranty',
+    pattern: jobData.patternPin || '',
+    mobileStatus: jobData.status || 'Received',
   },
-  physicalCondition: jobData.physicalConditions,
-  accessories: jobData.accessoriesReceived,
+  physicalCondition: jobData.physicalConditions || [],
+  accessories: jobData.accessoriesReceived || [],
   visualIssues: [],
-  idProofType: jobData.idProof,
+  idProofType: jobData.idProof || '',
   service: {
-    engineer: jobData.engineerId,
-    dealer: jobData.dealerName,
-    drawer: jobData.drawerId,
-    serviceCharge: Number(jobData.serviceCharges),
-    spareCharge: Number(jobData.spareCharges),
-    estimate: String(jobData.estimateAmount),
-    paymentMode: jobData.paymentMode,
-    repairDate: jobData.repairDate, // already string or Date – axios will stringify
-    deliveryDate: jobData.deliveredDate,
-    remarks: jobData.remarks,
+    engineer: jobData.engineerId || '',
+    dealer: jobData.dealerName || '',
+    drawer: jobData.drawerId || '',
+    serviceCharge: Number(jobData.serviceCharges) || 0,
+    spareCharge: Number(jobData.spareCharges) || 0,
+    estimate: String(jobData.estimateAmount || '0'),
+    paymentMode: jobData.paymentMode || '',
+    repairDate: jobData.repairDate || new Date().toISOString(),
+    deliveryDate: jobData.deliveredDate || null,
+    remarks: jobData.remarks || '',
   },
-  spareItems: jobData.spareItems,
+  spareItems: (jobData.spareItems || []).map(item => ({
+    name: item.name || '',
+    qty: Number(item.qty) || 0,
+    rate: Number(item.rate) || 0,
+    amount: (Number(item.qty) || 0) * (Number(item.rate) || 0),
+  })),
   createdBy: {
     username: currentUser?.username || 'unknown',
     role: currentUser?.role || 'user',
@@ -130,10 +134,40 @@ export const api = {
   },
 
   createJob: async (jobData) => {
+    // 1. Get the next job number from the backend
+    let nextJobNo;
+    try {
+      const nextRes = await apiClient.get('/api/jobsheets/next-number');
+      nextJobNo = nextRes.data.next;
+    } catch (err) {
+      console.warn('Failed to fetch next job number, using fallback:', err);
+      nextJobNo = `JS-${Date.now()}`;
+    }
+
+    // 2. Merge the job number into the data
+    const dataWithNo = { ...jobData, jobNo: nextJobNo };
+
     const userStr = await AsyncStorage.getItem('@radnus_user');
     const user = userStr ? JSON.parse(userStr) : null;
-    const backendData = transformJobToBackend(jobData, user);
-    const response = await apiClient.post('/api/jobsheets', backendData);
+    const backendData = transformJobToBackend(dataWithNo, user);
+    
+    // 3. Stringify nested objects as required by the backend
+    const payload = {
+      ...backendData,
+      customer: JSON.stringify(backendData.customer),
+      device: JSON.stringify(backendData.device),
+      service: JSON.stringify(backendData.service),
+      physicalCondition: JSON.stringify(backendData.physicalCondition),
+      accessories: JSON.stringify(backendData.accessories),
+      visualIssues: JSON.stringify(backendData.visualIssues),
+      spareItems: JSON.stringify(backendData.spareItems),
+      createdBy: JSON.stringify(backendData.createdBy),
+    };
+    
+    // Ensure jobSheetNo is included
+    payload.jobSheetNo = nextJobNo;
+    
+    const response = await apiClient.post('/api/jobsheets', payload);
     return transformJobToFrontend(response.data);
   },
 
@@ -141,7 +175,22 @@ export const api = {
     const userStr = await AsyncStorage.getItem('@radnus_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const backendData = transformJobToBackend(jobData, user);
-    const response = await apiClient.put(`/api/jobsheets/${id}`, backendData);
+    
+    const payload = {
+      ...backendData,
+      customer: JSON.stringify(backendData.customer),
+      device: JSON.stringify(backendData.device),
+      service: JSON.stringify(backendData.service),
+      physicalCondition: JSON.stringify(backendData.physicalCondition),
+      accessories: JSON.stringify(backendData.accessories),
+      visualIssues: JSON.stringify(backendData.visualIssues),
+      spareItems: JSON.stringify(backendData.spareItems),
+      createdBy: JSON.stringify(backendData.createdBy),
+    };
+    
+    if (!payload.jobSheetNo) delete payload.jobSheetNo;
+    
+    const response = await apiClient.put(`/api/jobsheets/${id}`, payload);
     return transformJobToFrontend(response.data);
   },
 
@@ -185,25 +234,6 @@ export const api = {
     await apiClient.delete(`/api/makes/${id}`);
   },
 
-  // Models
-  getModels: async () => {
-    const makes = await api.getMakes();
-    let allModels = [];
-    for (const make of makes) {
-      try {
-        const res = await apiClient.get(`/api/models/${encodeURIComponent(make.name)}`);
-        const modelsWithMakeId = res.data.map(m => ({
-          id: m._id,
-          name: m.name,
-          makeId: make.id,
-        }));
-        allModels.push(...modelsWithMakeId);
-      } catch (err) {
-        console.warn(`Failed to fetch models for make ${make.name}:`, err);
-      }
-    }
-    return allModels;
-  },
   addModel: async (makeId, name) => {
     const makes = await api.getMakes();
     const make = makes.find(m => m.id === makeId);
@@ -241,33 +271,45 @@ export const api = {
     await apiClient.delete(`/api/drawers/${id}`);
   },
 
-// Add inside the api object in src/utils/api.js
-
-getUsers: async () => {
-  const response = await apiClient.get('/api/users');
-  return response.data;
+  // Users
+  getUsers: async () => {
+    const response = await apiClient.get('/api/users');
+    return response.data;
+  },
+  addUser: async (userData) => {
+    const response = await apiClient.post('/api/users', userData);
+    return response.data;
+  },
+  deleteUser: async (id) => {
+    await apiClient.delete(`/api/users/${id}`);
+  },
+  updateEngineer: async (id, name) => {
+    const response = await apiClient.put(`/api/engineers/${id}`, { name });
+    return response.data;
+  },
+  getUserReport: async (searchTerm = '') => {
+    const params = new URLSearchParams();
+    if (searchTerm) params.append('jobSheetNo', searchTerm);
+    const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
+    return response.data;
+  },
+  getModels: async () => {
+  const makes = await api.getMakes();
+  let allModels = [];
+  for (const make of makes) {
+    try {
+      const res = await apiClient.get(`/api/models/${encodeURIComponent(make.name)}`);
+      const modelsWithMakeId = res.data.map(m => ({
+        _id: m._id,
+        id: m._id,
+        name: m.name,
+        makeId: make.id,
+      }));
+      allModels.push(...modelsWithMakeId);
+    } catch (err) {
+      console.warn(`Failed to fetch models for make ${make.name}:`, err);
+    }
+  }
+  return allModels;
 },
-
-addUser: async (userData) => {
-  const response = await apiClient.post('/api/users', userData);
-  return response.data;
-},
-
-deleteUser: async (id) => {
-  await apiClient.delete(`/api/users/${id}`);
-},
-
-updateEngineer: async (id, name) => {
-  const response = await apiClient.put(`/api/engineers/${id}`, { name });
-  return response.data;
-},
-
-// Inside src/utils/api.js, add to the api object:
-getUserReport: async (searchTerm = '') => {
-  const params = new URLSearchParams();
-  if (searchTerm) params.append('jobSheetNo', searchTerm);
-  const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
-  return response.data;
-},
-
 };

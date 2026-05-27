@@ -37,12 +37,10 @@ export default function AdminScreens() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const toast = useToast();
-  const { user } = useAuth(); // Get current user from AuthContext
+  const { user } = useAuth();
   const { makes, models, faults, drawers, engineers, loading } = useSelector((state) => state.admin);
-
   const isAdmin = user?.role === 'admin';
 
-  // Collapse/expand state
   const [expandedSections, setExpandedSections] = useState({
     makes: true,
     models: false,
@@ -51,30 +49,25 @@ export default function AdminScreens() {
     engineers: false,
   });
 
-  // Search states
   const [makeSearch, setMakeSearch] = useState('');
   const [modelSearch, setModelSearch] = useState('');
   const [faultSearch, setFaultSearch] = useState('');
   const [drawerSearch, setDrawerSearch] = useState('');
   const [engineerSearch, setEngineerSearch] = useState('');
 
-  // Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedMakeForModel, setSelectedMakeForModel] = useState('');
   const [selectedMakeId, setSelectedMakeId] = useState('');
 
+  // Load all data once on mount
   useEffect(() => {
-    fetchAllData();
-  }, []);
-
-  const fetchAllData = () => {
     dispatch(fetchMakes());
     dispatch(fetchModels());
     dispatch(fetchFaults());
     dispatch(fetchDrawers());
     dispatch(fetchEngineers());
-  };
+  }, [dispatch]);
 
   const toggleSection = (key) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -134,6 +127,7 @@ export default function AdminScreens() {
     }
   }, [dispatch, modalType, selectedMakeForModel, toast]);
 
+  // FIX: handleDelete now correctly receives type, id, name
   const handleDelete = useCallback((type, id, name) => {
     Alert.alert(
       'Delete',
@@ -148,8 +142,8 @@ export default function AdminScreens() {
               switch (type) {
                 case 'make':
                   await dispatch(deleteMake(id)).unwrap();
-                  toast.show('Make deleted', { type: 'success' });
                   if (selectedMakeId === id) setSelectedMakeId('');
+                  toast.show('Make deleted', { type: 'success' });
                   break;
                 case 'model':
                   await dispatch(deleteModel(id)).unwrap();
@@ -167,8 +161,13 @@ export default function AdminScreens() {
                   await dispatch(deleteEngineer(id)).unwrap();
                   toast.show('Engineer deleted', { type: 'success' });
                   break;
+                default:
+                  toast.show('Unknown type', { type: 'danger' });
               }
+              // Redux state is updated optimistically by the slice reducer —
+              // no manual re-fetch needed. The list updates automatically.
             } catch (error) {
+              console.error('Delete error:', error);
               toast.show(error.message || 'Failed to delete', { type: 'danger' });
             }
           },
@@ -183,7 +182,6 @@ export default function AdminScreens() {
         try {
           await dispatch(updateEngineer({ id, name: newName })).unwrap();
           toast.show('Engineer updated', { type: 'success' });
-          dispatch(fetchEngineers());
         } catch (error) {
           toast.show('Update failed', { type: 'danger' });
         }
@@ -194,37 +192,33 @@ export default function AdminScreens() {
   // Filtered data
   const filteredMakes = useMemo(() => {
     if (!makeSearch) return makes;
-    return makes.filter(m => m.name.toLowerCase().includes(makeSearch.toLowerCase()));
+    return makes.filter(m => m.name?.toLowerCase().includes(makeSearch.toLowerCase()));
   }, [makes, makeSearch]);
 
   const filteredModels = useMemo(() => {
     let filtered = models;
-    if (selectedMakeId) {
-      filtered = filtered.filter(m => m.makeId === selectedMakeId);
-    }
-    if (modelSearch) {
-      filtered = filtered.filter(m => m.name.toLowerCase().includes(modelSearch.toLowerCase()));
-    }
+    if (selectedMakeId) filtered = filtered.filter(m => m.makeId === selectedMakeId);
+    if (modelSearch) filtered = filtered.filter(m => m.name?.toLowerCase().includes(modelSearch.toLowerCase()));
     return filtered;
   }, [models, selectedMakeId, modelSearch]);
 
   const filteredFaults = useMemo(() => {
     if (!faultSearch) return faults;
-    return faults.filter(f => f.name.toLowerCase().includes(faultSearch.toLowerCase()));
+    return faults.filter(f => f.name?.toLowerCase().includes(faultSearch.toLowerCase()));
   }, [faults, faultSearch]);
 
   const filteredDrawers = useMemo(() => {
     if (!drawerSearch) return drawers;
-    return drawers.filter(d => d.name.toLowerCase().includes(drawerSearch.toLowerCase()));
+    return drawers.filter(d => d.name?.toLowerCase().includes(drawerSearch.toLowerCase()));
   }, [drawers, drawerSearch]);
 
   const filteredEngineers = useMemo(() => {
     if (!engineerSearch) return engineers;
-    return engineers.filter(e => e.name.toLowerCase().includes(engineerSearch.toLowerCase()));
+    return engineers.filter(e => e.name?.toLowerCase().includes(engineerSearch.toLowerCase()));
   }, [engineers, engineerSearch]);
 
-  // Render item row with edit for engineers
-  const renderItemRow = ({ item, type }) => {
+  // FIX: renderItemRow receives type directly — not from FlatList's renderItem signature
+  const renderItemRow = (type) => ({ item }) => {
     const isEngineer = type === 'engineer';
     return (
       <View style={styles.listItem}>
@@ -292,8 +286,13 @@ export default function AdminScreens() {
         return null;
     }
 
+    const addLabel = {
+      make: 'Add Make', model: 'Add Model', fault: 'Add Fault',
+      drawer: 'Add Drawer', engineer: 'Add Engineer',
+    }[section.type] || 'Add Item';
+
     return (
-      <View style={styles.sectionCard}>
+      <View style={styles.sectionCard} key={section.key}>
         <TouchableOpacity style={styles.sectionHeader} onPress={() => toggleSection(section.key)}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
           {isExpanded ? <ChevronUp size={22} color={COLORS.gray600} /> : <ChevronDown size={22} color={COLORS.gray600} />}
@@ -315,13 +314,13 @@ export default function AdminScreens() {
             <FlatList
               data={data}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => renderItemRow({ item, type: section.type })}
+              renderItem={renderItemRow(section.type)}  // FIX: pass type via closure
               ListEmptyComponent={<Text style={styles.emptyText}>No items found</Text>}
               scrollEnabled={false}
             />
             <TouchableOpacity style={styles.addButton} onPress={() => openAddModal(addModalType, selectedMakeId)}>
               <Plus size={18} color={COLORS.white} />
-              <Text style={styles.addButtonText}>Add {section.type === 'make' ? 'Make' : section.type === 'model' ? 'Model' : section.type === 'fault' ? 'Fault' : section.type === 'drawer' ? 'Drawer' : 'Engineer'}</Text>
+              <Text style={styles.addButtonText}>{addLabel}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -331,7 +330,6 @@ export default function AdminScreens() {
 
   return (
     <View style={styles.container}>
-      {/* Admin Navigation Buttons - Only show for admin users */}
       {isAdmin && (
         <View style={styles.adminHeader}>
           <TouchableOpacity style={styles.adminNavButton} onPress={() => navigation.navigate('UserList')}>
@@ -397,7 +395,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.lg,
-    paddingTop: 0,
+    paddingTop: 16,
   },
   sectionCard: {
     backgroundColor: COLORS.white,
@@ -459,9 +457,9 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
   },
   editButton: {
+    marginRight: SPACING.sm,
     padding: SPACING.xs,
   },
   deleteButton: {
