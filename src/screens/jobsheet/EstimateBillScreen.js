@@ -1,3 +1,4 @@
+
 // src/screens/jobsheet/EstimateBillScreen.js
 import React, { useEffect, useState, useRef } from 'react';
 import {
@@ -9,7 +10,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   Share,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -20,7 +20,6 @@ import { Share2, Printer, Mail, ArrowLeft, FileText } from 'lucide-react-native'
 import { api } from '../../utils/api';
 import RNFS from 'react-native-fs';
 
-// Import your logo - place logo.png in src/assets/
 const logo = require('../../assets/logo.png');
 
 export default function EstimateBillScreen() {
@@ -28,36 +27,65 @@ export default function EstimateBillScreen() {
   const navigation = useNavigation();
   const { id } = route.params;
   const viewShotRef = useRef(null);
-  
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Holds the real logo as a base64 data-URI so RNPrint renders it correctly
+  const [logoBase64, setLogoBase64] = useState('');
 
-  useEffect(() => {
-    fetchJob();
-  }, [id]);
+  useEffect(() => { fetchJob(); loadLogo(); }, [id]);
+
+  // Resolve the bundled logo asset path and read it as base64
+  const loadLogo = async () => {
+    try {
+      // React Native resolves require() to an asset path we can read with RNFS
+      const asset = Image.resolveAssetSource(logo);
+      let path = asset?.uri || '';
+      // On Android the uri may be an asset:// or file:// path
+      if (path.startsWith('file://')) {
+        path = path.replace('file://', '');
+      } else if (path.startsWith('/')) {
+        // already a filesystem path
+      } else {
+        // Fallback: copy from bundle to a temp file RNFS can read
+        const dest = `${RNFS.CachesDirectoryPath}/radnus_logo.png`;
+        await RNFS.copyFileAssets('logo.png', dest).catch(() => {});
+        path = dest;
+      }
+      const b64 = await RNFS.readFile(path, 'base64');
+      setLogoBase64(`data:image/png;base64,${b64}`);
+    } catch (e) {
+      // If reading fails, generateHTML falls back to the placeholder
+      console.warn('Logo load failed:', e);
+    }
+  };
 
   const fetchJob = async () => {
     try {
+      // api.getJobById now returns resolved makeName/modelName/engineerName
       const job = await api.getJobById(id);
       setData(job);
     } catch (error) {
-      console.error('Estimate fetch error:', error);
       Alert.alert('Error', 'Failed to load estimate details');
     } finally {
       setLoading(false);
     }
   };
 
-  const val = (v) => (v && v !== 'NIL' ? v : 'N/A');
+  const val = (v) => (v && v !== 'NIL' && v !== 'N/A' ? v : 'N/A');
 
-  const total =
-    Number(data?.serviceCharges || 0) +
-    Number(data?.spareCharges || 0);
+  // FIX: use resolved name fields
+  const makeName = data?.makeName || data?.makeId || 'N/A';
+  const modelName = data?.modelName || data?.modelId || 'N/A';
+  const engineerName = data?.engineerName || data?.engineerId || 'N/A';
 
-  // Generate HTML for PDF and Print
+  const total = Number(data?.serviceCharges || 0) + Number(data?.spareCharges || 0);
+
+  // Generate HTML matching the reference image (Image 2)
   const generateHTML = () => {
+    const faults = data?.physicalConditions?.filter(f => f && f !== 'NIL').join(', ') || 'N/A';
     return `
       <!DOCTYPE html>
       <html>
@@ -66,273 +94,138 @@ export default function EstimateBillScreen() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Estimate - ${data?.jobNo}</title>
         <style>
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            margin: 0;
-            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-            background: #f5f7fa;
-          }
-          .wrapper {
-            display: flex;
-            justify-content: center;
-            padding: 30px 0;
-          }
-          .a4 {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 15mm;
-            box-sizing: border-box;
-            background: #fff;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-            border-radius: 8px;
-            position: relative;
-          }
+          @page { size: A4; margin: 12mm; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; font-size: 11px; color: #222; }
+          .page { position: relative; }
           .watermark {
-            position: absolute;
-            top: 45%;
-            left: 50%;
+            position: fixed; top: 45%; left: 50%;
             transform: translate(-50%, -50%) rotate(-30deg);
-            font-size: 90px;
-            color: rgba(0,0,0,0.04);
-            font-weight: bold;
-            white-space: nowrap;
+            font-size: 100px; color: rgba(0,0,0,0.04);
+            font-weight: bold; white-space: nowrap; pointer-events: none;
           }
+          /* Header */
           .header {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            border-bottom: 2px solid #222;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
+            display: flex; align-items: center;
+            border-bottom: 2px solid #111;
+            padding-bottom: 12px; margin-bottom: 16px;
           }
-          .company {
-            font-size: 18px;
-            font-weight: 700;
-          }
-          .sub {
-            font-size: 12px;
-            line-height: 1.6;
-            color: #444;
-            margin-top: 8px;
-          }
-          .logo-box {
-            text-align: center;
-          }
-          .logo-box img {
-            height: 60px;
-            width: 60px;
-            border-radius: 30px;
-            object-fit: cover;
-          }
-          .job-box {
-            justify-self: end;
-          }
-          .job-title {
-            text-align: center;
-            font-weight: 700;
-            margin-bottom: 6px;
-            font-size: 14px;
-          }
-          .job-box table {
-            font-size: 12px;
-            border-collapse: collapse;
-            width: 100%;
-          }
-          .job-box td {
-            padding: 2px 6px;
-          }
-          .section {
-            margin-bottom: 18px;
-          }
+          .header-left { flex: 1; }
+          .company-name { font-size: 17px; font-weight: 800; letter-spacing: 0.5px; }
+          .company-sub { font-size: 10px; color: #555; line-height: 1.7; margin-top: 4px; }
+          .header-center { width: 90px; text-align: center; }
+          .header-center img { width: 75px; height: 75px; object-fit: contain; }
+          .header-right { flex: 1; text-align: right; }
+          .job-sheet-label { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+          .job-table { font-size: 11px; border-collapse: collapse; margin-left: auto; }
+          .job-table td { padding: 2px 4px; }
+          .job-table td:first-child { font-weight: 600; }
+          .job-table td:nth-child(2) { padding: 2px 6px; }
+          /* Sections */
+          .grid { display: flex; gap: 14px; margin-bottom: 16px; }
+          .grid > div { flex: 1; }
           .section-title {
-            font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #222;
-            border-left: 4px solid #EF4444;
-            padding-left: 8px;
-            text-transform: uppercase;
+            font-size: 12px; font-weight: 700; color: #111;
+            border-left: 4px solid #EF4444; padding-left: 8px;
+            text-transform: uppercase; margin-bottom: 8px;
           }
-          .box {
-            border: 1px solid #ddd;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            background: #fafafa;
-            line-height: 1.8;
+          .info-box {
+            border: 1px solid #ddd; border-radius: 6px;
+            padding: 10px 12px; background: #fafafa;
+            font-size: 11px; line-height: 1.9;
           }
-          .grid {
-            display: flex;
-            gap: 15px;
-          }
-          .grid > div {
-            flex: 1;
-          }
+          /* Estimate */
           .estimate-box {
-            border: 2px dashed #333;
-            padding: 15px;
-            font-size: 14px;
-            background: #f9f9f9;
-            border-radius: 8px;
+            border: 2px dashed #444; border-radius: 6px;
+            padding: 14px; background: #f9f9f9;
+            font-size: 12px; margin-bottom: 16px;
           }
-          .estimate-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
+          .est-row { display: flex; justify-content: space-between; padding: 4px 0; }
+          .est-divider { border-top: 1px solid #ccc; margin: 8px 0; }
+          .est-total { font-weight: 700; font-size: 13px; }
+          .est-total-val { font-weight: 700; font-size: 13px; color: #EF4444; }
+          /* Remarks */
+          .remarks-box {
+            border: 1px solid #ccc; border-left: 4px solid #333;
+            border-radius: 4px; padding: 10px 14px;
+            background: #f9f9f9; font-size: 11px;
+            line-height: 1.7; margin-bottom: 16px;
           }
-          .estimate-divider {
-            border-top: 1px solid #ddd;
-            margin: 10px 0;
-          }
-          .sign-row {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-          }
-          .sign-box {
-            width: 30%;
-            text-align: center;
-          }
-          .sign-line {
-            height: 50px;
-            border-bottom: 1px solid #000;
-            margin-bottom: 6px;
-          }
-          .sign-label {
-            font-size: 12px;
-            font-weight: 600;
-          }
-          .remarks-text {
-            border: 1px solid #d0d0d0;
-            border-left: 4px solid #333;
-            border-radius: 4px;
-            padding: 12px 16px;
-            background: #f9f9f9;
-            font-size: 13px;
-            line-height: 1.7;
-            color: #222;
-          }
-          @media print {
-            body {
-              background: #fff;
-            }
-            .wrapper {
-              padding: 0;
-            }
-            .a4 {
-              height: 297mm;
-              overflow: hidden;
-              box-shadow: none;
-            }
-          }
+          /* Signatures */
+          .sign-row { display: flex; justify-content: space-between; margin-top: 30px; }
+          .sign-box { width: 28%; text-align: center; }
+          .sign-line { height: 48px; border-bottom: 1px solid #000; margin-bottom: 6px; }
+          .sign-label { font-size: 10px; font-weight: 600; }
         </style>
       </head>
       <body>
-        <div class="wrapper">
-          <div class="a4">
-            <div class="watermark">RADNUS</div>
+        <div class="page">
+          <div class="watermark">RADNUS</div>
 
-            <!-- HEADER -->
-            <div class="header">
-              <div>
-                <div class="company">RADNUS COMMUNICATION</div>
-                <div class="sub">
-                  242, Sinnaya Plaza, MG Road,<br />
-                  Puducherry - 605001<br />
-                  Phone: 81222 73355 / 99409 73030<br />
-                  Mon–Sat (10AM–7PM)<br />
-                  Website: www.radnus.in
-                </div>
-              </div>
-              <div class="logo-box">
-                <div style="width:60px;height:60px;background:#EF4444;border-radius:30px;display:flex;align-items:center;justify-content:center;color:white;font-size:28px;font-weight:bold;margin:0 auto;">R</div>
-              </div>
-              <div class="job-box">
-                <div class="job-title">JOB SHEET</div>
-                <table>
-                  <tbody>
-                    <tr><td><b>Job No</b></td><td>:</td><td>${val(data?.jobNo)}</td></tr>
-                    <tr><td><b>Created</b></td><td>:</td><td>${val(data?.savedDate)}</td></tr>
-                    <tr><td><b>Delivery</b></td><td>:</td><td>${val(data?.deliveredDate?.split('T')[0])}</td></tr>
-                    <tr><td><b>Engineer</b></td><td>:</td><td>${val(data?.engineerId)}</td></tr>
-                  </tbody>
-                </table>
+          <div class="header">
+            <div class="header-left">
+              <div class="company-name">RADNUS COMMUNICATION</div>
+              <div class="company-sub">
+                242, Sinnaya Plaza, MG Road,<br>
+                Puducherry - 605001<br>
+                Phone: 81222 73355 / 99409 73030<br>
+                98944 36987<br>
+                Mon–Sat (10AM–7PM)<br>
+                Website: www.radnus.in
               </div>
             </div>
+            <div class="header-center">
+              <img src="${logoBase64 || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI0MCIgY3k9IjQwIiByPSI0MCIgZmlsbD0iI0VGNDQwMCIvPjx0ZXh0IHg9IjQwIiB5PSI1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSI0OCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iQXJpYWwiPlI8L3RleHQ+PC9zdmc+'}" alt="logo" />
+            </div>
+            <div class="header-right">
+              <div class="job-sheet-label">JOB SHEET</div>
+              <table class="job-table">
+                <tr><td>Job No</td><td>:</td><td>${val(data?.jobNo)}</td></tr>
+                <tr><td>Created</td><td>:</td><td>${val(data?.savedDate)}</td></tr>
+                <tr><td>Delivery</td><td>:</td><td>${data?.deliveredDate ? data.deliveredDate.split('T')[0] : 'N/A'}</td></tr>
+                <tr><td>Engineer</td><td>:</td><td>${val(engineerName)}</td></tr>
+              </table>
+            </div>
+          </div>
 
-            <!-- CUSTOMER + DEVICE -->
-            <div class="grid section">
-              <div>
-                <div class="section-title">Customer</div>
-                <div class="box">
-                  Name: ${val(data?.customerName)}<br />
-                  Phone: ${val(data?.contact)}<br />
-                  Email: ${val(data?.email)}<br />
-                  Address: ${val(data?.address)}
-                </div>
-              </div>
-              <div>
-                <div class="section-title">Device</div>
-                <div class="box">
-                  Brand: ${val(data?.makeId)}<br />
-                  Model: ${val(data?.modelId)}<br />
-                  IMEI: ${val(data?.imei)}<br />
-                  Fault: ${val(data?.physicalConditions?.join(', '))}
-                </div>
+          <div class="grid">
+            <div>
+              <div class="section-title">Customer</div>
+              <div class="info-box">
+                Name: ${val(data?.customerName)}<br>
+                Phone: ${val(data?.contact)}<br>
+                Email: ${val(data?.email)}<br>
+                Address: ${val(data?.address)}
               </div>
             </div>
-
-            <!-- ESTIMATE -->
-            <div class="section">
-              <div class="section-title">Estimate Amount</div>
-              <div class="estimate-box">
-                <div class="estimate-row">
-                  <span>Service Charge</span>
-                  <span>₹ ${data?.serviceCharges || 0}</span>
-                </div>
-                <div class="estimate-row">
-                  <span>Spare Charge</span>
-                  <span>₹ ${data?.spareCharges || 0}</span>
-                </div>
-                <div class="estimate-divider"></div>
-                <div class="estimate-row" style="font-weight: bold;">
-                  <span>Total Estimate</span>
-                  <span>₹ ${total}</span>
-                </div>
+            <div>
+              <div class="section-title">Device</div>
+              <div class="info-box">
+                Brand: ${val(makeName)}<br>
+                Model: ${val(modelName)}<br>
+                IMEI: ${data?.imei || 'N/A'}<br>
+                Fault: ${faults}
               </div>
             </div>
+          </div>
 
-            <!-- REMARKS -->
-            ${data?.remarks ? `
-            <div class="section">
-              <div class="section-title">Remarks</div>
-              <div class="remarks-text">${data.remarks}</div>
-            </div>
-            ` : ''}
+          <div class="section-title">Estimate Amount</div>
+          <div class="estimate-box">
+            <div class="est-row"><span>Service Charge</span><span>₹ ${data?.serviceCharges || 0}</span></div>
+            <div class="est-row"><span>Spare Charge</span><span>₹ ${data?.spareCharges || 0}</span></div>
+            <div class="est-divider"></div>
+            <div class="est-row"><span class="est-total">Total Estimate</span><span class="est-total-val">₹ ${total}</span></div>
+          </div>
 
-            <!-- SIGNATURES -->
-            <div class="sign-row">
-              <div class="sign-box">
-                <div class="sign-line"></div>
-                <div class="sign-label">Customer Signature</div>
-              </div>
-              <div class="sign-box">
-                <div class="sign-line"></div>
-                <div class="sign-label">For RADNUS</div>
-              </div>
-              <div class="sign-box">
-                <div class="sign-line"></div>
-                <div class="sign-label">Authorized Signatory</div>
-              </div>
-            </div>
+          ${data?.remarks ? `
+          <div class="section-title">Remarks</div>
+          <div class="remarks-box">${data.remarks}</div>
+          ` : ''}
+
+          <div class="sign-row">
+            <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Customer Signature</div></div>
+            <div class="sign-box"><div class="sign-line"></div><div class="sign-label">For RADNUS</div></div>
+            <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Authorized Signatory</div></div>
           </div>
         </div>
       </body>
@@ -340,23 +233,16 @@ export default function EstimateBillScreen() {
     `;
   };
 
-  // Generate and save PDF
   const generatePDF = async () => {
     setGenerating(true);
     try {
-      const html = generateHTML();
-      const options = {
-        html,
+      const file = await RNHTMLtoPDF.convert({
+        html: generateHTML(),
         fileName: `Estimate_${data?.jobNo}`,
         directory: 'Documents',
-      };
-      const file = await RNHTMLtoPDF.convert(options);
-      if (file.filePath) {
-        return file.filePath;
-      }
-      return null;
+      });
+      return file.filePath || null;
     } catch (error) {
-      console.error('PDF generation error:', error);
       Alert.alert('Error', 'Failed to generate PDF');
       return null;
     } finally {
@@ -364,21 +250,17 @@ export default function EstimateBillScreen() {
     }
   };
 
-  // Print
   const handlePrint = async () => {
     setGenerating(true);
     try {
-      const html = generateHTML();
-      await RNPrint.print({ html });
+      await RNPrint.print({ html: generateHTML() });
     } catch (error) {
-      console.error('Print error:', error);
       Alert.alert('Error', 'Failed to print. Please try again.');
     } finally {
       setGenerating(false);
     }
   };
 
-  // Share as PDF
   const handleSharePDF = async () => {
     setGenerating(true);
     try {
@@ -391,14 +273,12 @@ export default function EstimateBillScreen() {
         });
       }
     } catch (error) {
-      console.error('Share error:', error);
       Alert.alert('Error', 'Failed to share PDF');
     } finally {
       setGenerating(false);
     }
   };
 
-  // Share as Image
   const handleShareImage = async () => {
     if (!viewShotRef.current) return;
     setGenerating(true);
@@ -410,30 +290,18 @@ export default function EstimateBillScreen() {
         message: `Estimate for ${data?.customerName}`,
       });
     } catch (error) {
-      console.error('Share image error:', error);
-      Alert.alert('Error', 'Failed to capture or share');
+      Alert.alert('Error', 'Failed to share');
     } finally {
       setGenerating(false);
     }
   };
 
-  // Send email via backend
   const handleEmail = async () => {
     if (!data?.email || data?.email === 'N/A') {
       Alert.alert('No Email', 'Customer email address not available');
       return;
     }
-    setSending(true);
-    try {
-      const API_BASE_URL = 'https://your-backend-url.com'; // Replace with your API URL
-      await axios.post(`${API_BASE_URL}/api/jobsheets/send-estimate/${id}`);
-      Alert.alert('Success', 'Estimate email sent successfully ✅');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to send email');
-    } finally {
-      setSending(false);
-    }
+    Alert.alert('Coming Soon', 'Email feature will be available soon');
   };
 
   if (loading) {
@@ -456,9 +324,10 @@ export default function EstimateBillScreen() {
     );
   }
 
+  const faults = data.physicalConditions?.filter(f => f && f !== 'NIL').join(', ') || 'N/A';
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIcon}>
           <ArrowLeft size={24} color="#333" />
@@ -468,14 +337,14 @@ export default function EstimateBillScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Bill Content for ViewShot */}
-        <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
+        <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
           <View style={styles.billContainer}>
-            <View style={styles.watermarkContainer}>
+            {/* Watermark */}
+            <View style={styles.watermarkContainer} pointerEvents="none">
               <Text style={styles.watermark}>RADNUS</Text>
             </View>
 
-            {/* Header */}
+            {/* Header Row */}
             <View style={styles.headerRow}>
               <View style={styles.companySection}>
                 <Text style={styles.companyName}>RADNUS COMMUNICATION</Text>
@@ -483,20 +352,38 @@ export default function EstimateBillScreen() {
                   242, Sinnaya Plaza, MG Road,{'\n'}
                   Puducherry - 605001{'\n'}
                   Phone: 81222 73355 / 99409 73030{'\n'}
+                  98944 36987{'\n'}
                   Mon–Sat (10AM–7PM){'\n'}
                   Website: www.radnus.in
                 </Text>
               </View>
               <View style={styles.logoBox}>
-                <Image source={logo} style={styles.logoImage} />
+                <Image source={logo} style={styles.logoImage} resizeMode="contain" />
               </View>
               <View style={styles.jobBox}>
-                <Text style={styles.jobTitle}>JOB SHEET</Text>
-                <View style={styles.jobDetails}>
-                  <Text><Text style={styles.jobLabel}>Job No:</Text> {val(data.jobNo)}</Text>
-                  <Text><Text style={styles.jobLabel}>Created:</Text> {val(data.savedDate)}</Text>
-                  <Text><Text style={styles.jobLabel}>Delivery:</Text> {val(data.deliveredDate?.split('T')[0])}</Text>
-                  <Text><Text style={styles.jobLabel}>Engineer:</Text> {val(data.engineerId)}</Text>
+                <Text style={styles.jobSheetLabel}>JOB SHEET</Text>
+                <View style={styles.jobDetailsBox}>
+                  <View style={styles.jobRow}>
+                    <Text style={styles.jobKey}>Job No</Text>
+                    <Text style={styles.jobColon}> : </Text>
+                    <Text style={styles.jobVal}>{val(data.jobNo)}</Text>
+                  </View>
+                  <View style={styles.jobRow}>
+                    <Text style={styles.jobKey}>Created</Text>
+                    <Text style={styles.jobColon}> : </Text>
+                    <Text style={styles.jobVal}>{val(data.savedDate)}</Text>
+                  </View>
+                  <View style={styles.jobRow}>
+                    <Text style={styles.jobKey}>Delivery</Text>
+                    <Text style={styles.jobColon}> : </Text>
+                    <Text style={styles.jobVal}>{data.deliveredDate ? data.deliveredDate.split('T')[0] : 'N/A'}</Text>
+                  </View>
+                  {/* FIX: show resolved engineer name */}
+                  <View style={styles.jobRow}>
+                    <Text style={styles.jobKey}>Engineer</Text>
+                    <Text style={styles.jobColon}> : </Text>
+                    <Text style={styles.jobVal}>{val(engineerName)}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -506,46 +393,45 @@ export default function EstimateBillScreen() {
               <View style={styles.column}>
                 <Text style={styles.sectionTitle}>Customer</Text>
                 <View style={styles.infoBox}>
-                  <Text>Name: {val(data.customerName)}</Text>
-                  <Text>Phone: {val(data.contact)}</Text>
-                  <Text>Email: {val(data.email)}</Text>
-                  <Text>Address: {val(data.address)}</Text>
+                  <Text style={styles.infoText}>Name: {val(data.customerName)}</Text>
+                  <Text style={styles.infoText}>Phone: {val(data.contact)}</Text>
+                  <Text style={styles.infoText}>Email: {val(data.email)}</Text>
+                  <Text style={styles.infoText}>Address: {val(data.address)}</Text>
                 </View>
               </View>
               <View style={styles.column}>
                 <Text style={styles.sectionTitle}>Device</Text>
                 <View style={styles.infoBox}>
-                  <Text>Brand: {val(data.makeId)}</Text>
-                  <Text>Model: {val(data.modelId)}</Text>
-                  <Text>IMEI: {val(data.imei)}</Text>
-                  <Text>Fault: {val(data.physicalConditions?.join(', '))}</Text>
+                  {/* FIX: use resolved name fields */}
+                  <Text style={styles.infoText}>Brand: {val(makeName)}</Text>
+                  <Text style={styles.infoText}>Model: {val(modelName)}</Text>
+                  <Text style={styles.infoText}>IMEI: {data.imei || 'N/A'}</Text>
+                  <Text style={styles.infoText}>Fault: {faults}</Text>
                 </View>
               </View>
             </View>
 
             {/* Estimate Amount */}
-            <View>
-              <Text style={styles.sectionTitle}>Estimate Amount</Text>
-              <View style={styles.estimateBox}>
-                <View style={styles.estimateRow}>
-                  <Text>Service Charge</Text>
-                  <Text>₹ {data.serviceCharges || 0}</Text>
-                </View>
-                <View style={styles.estimateRow}>
-                  <Text>Spare Charge</Text>
-                  <Text>₹ {data.spareCharges || 0}</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={[styles.estimateRow, styles.totalRow]}>
-                  <Text style={styles.totalLabel}>Total Estimate</Text>
-                  <Text style={styles.totalValue}>₹ {total}</Text>
-                </View>
+            <Text style={styles.sectionTitle}>Estimate Amount</Text>
+            <View style={styles.estimateBox}>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateLabel}>Service Charge</Text>
+                <Text style={styles.estimateValue}>₹ {data.serviceCharges || 0}</Text>
+              </View>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateLabel}>Spare Charge</Text>
+                <Text style={styles.estimateValue}>₹ {data.spareCharges || 0}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.estimateRow}>
+                <Text style={styles.totalLabel}>Total Estimate</Text>
+                <Text style={styles.totalValue}>₹ {total}</Text>
               </View>
             </View>
 
             {/* Remarks */}
-            {data.remarks && (
-              <View>
+            {!!data.remarks && (
+              <View style={{ marginBottom: 16 }}>
                 <Text style={styles.sectionTitle}>Remarks</Text>
                 <View style={styles.remarksBox}>
                   <Text style={styles.remarksText}>{data.remarks}</Text>
@@ -581,10 +467,6 @@ export default function EstimateBillScreen() {
             {generating ? <ActivityIndicator size="small" color="#fff" /> : <Printer size={20} color="#fff" />}
             <Text style={styles.actionText}>Print</Text>
           </TouchableOpacity>
-          {/* <TouchableOpacity style={[styles.actionButton, styles.pdfButton]} onPress={handleSharePDF} disabled={generating}>
-            {generating ? <ActivityIndicator size="small" color="#fff" /> : <FileText size={20} color="#fff" />}
-            <Text style={styles.actionText}>PDF</Text>
-          </TouchableOpacity> */}
           <TouchableOpacity style={[styles.actionButton, styles.emailButton]} onPress={handleEmail} disabled={sending}>
             {sending ? <ActivityIndicator size="small" color="#fff" /> : <Mail size={20} color="#fff" />}
             <Text style={styles.actionText}>Email</Text>
@@ -596,243 +478,97 @@ export default function EstimateBillScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
-  },
+  container: { flex: 1, backgroundColor: '#f5f7fa' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
   },
-  backIcon: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
+  backIcon: { padding: 8 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  scrollContent: { padding: 16, paddingBottom: 32 },
+
   billContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: 700,
+    backgroundColor: '#fff', borderRadius: 10,
+    padding: 18, position: 'relative', overflow: 'hidden',
   },
   watermarkContainer: {
-    position: 'absolute',
-    top: '40%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    transform: [{ rotate: '-30deg' }],
+    position: 'absolute', top: '40%', left: 0, right: 0,
+    alignItems: 'center', transform: [{ rotate: '-30deg' }],
   },
-  watermark: {
-    fontSize: 80,
-    color: 'rgba(0,0,0,0.03)',
-    fontWeight: 'bold',
-  },
+  watermark: { fontSize: 80, color: 'rgba(0,0,0,0.04)', fontWeight: 'bold' },
+
+  // Header row
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 2,
-    borderBottomColor: '#222',
-    paddingBottom: 12,
-    marginBottom: 20,
+    flexDirection: 'row', alignItems: 'flex-start',
+    borderBottomWidth: 2, borderBottomColor: '#111',
+    paddingBottom: 12, marginBottom: 18,
   },
-  companySection: {
-    flex: 1,
-  },
-  companyName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#222',
-  },
-  companyAddress: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  logoBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  logoImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  jobBox: {
-    alignItems: 'flex-end',
-  },
-  jobTitle: {
-    fontWeight: 'bold',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  jobDetails: {
-    backgroundColor: '#f5f5f5',
-    padding: 8,
-    borderRadius: 6,
-  },
-  jobLabel: {
-    fontWeight: '600',
-  },
-  twoColumn: {
-    flexDirection: 'row',
-    marginBottom: 18,
-    gap: 15,
-  },
-  column: {
-    flex: 1,
-  },
+  companySection: { flex: 1, paddingRight: 8 },
+  companyName: { fontSize: 15, fontWeight: '800', color: '#111' },
+  companyAddress: { fontSize: 10, color: '#555', marginTop: 4, lineHeight: 16 },
+  logoBox: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  logoImage: { width: 70, height: 70 },
+  jobBox: { flex: 1, alignItems: 'flex-end' },
+  jobSheetLabel: { fontWeight: '700', fontSize: 13, marginBottom: 6, color: '#111' },
+  jobDetailsBox: { backgroundColor: '#f5f5f5', padding: 8, borderRadius: 6 },
+  jobRow: { flexDirection: 'row', marginBottom: 2 },
+  jobKey: { fontSize: 10, fontWeight: '600', width: 52 },
+  jobColon: { fontSize: 10 },
+  jobVal: { fontSize: 10, flex: 1 },
+
+  // Section layout
+  twoColumn: { flexDirection: 'row', gap: 12, marginBottom: 18 },
+  column: { flex: 1 },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#222',
-    borderLeftWidth: 4,
-    borderLeftColor: '#EF4444',
-    paddingLeft: 8,
-    textTransform: 'uppercase',
+    fontSize: 12, fontWeight: '700', color: '#111',
+    borderLeftWidth: 4, borderLeftColor: '#EF4444',
+    paddingLeft: 8, textTransform: 'uppercase', marginBottom: 8,
   },
   infoBox: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#fafafa',
-    lineHeight: 22,
+    borderWidth: 1, borderColor: '#ddd', padding: 10,
+    borderRadius: 7, backgroundColor: '#fafafa',
   },
+  infoText: { fontSize: 11, lineHeight: 20, color: '#222' },
+
+  // Estimate
   estimateBox: {
-    borderWidth: 2,
-    borderColor: '#333',
-    borderStyle: 'dashed',
-    padding: 15,
-    borderRadius: 8,
-    backgroundColor: '#f9f9f9',
+    borderWidth: 2, borderColor: '#444', borderStyle: 'dashed',
+    padding: 14, borderRadius: 7, backgroundColor: '#f9f9f9', marginBottom: 18,
   },
-  estimateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  divider: {
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    marginVertical: 10,
-  },
-  totalRow: {
-    marginTop: 5,
-  },
-  totalLabel: {
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  totalValue: {
-    fontWeight: 'bold',
-    fontSize: 14,
-    color: '#EF4444',
-  },
+  estimateRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  estimateLabel: { fontSize: 12, color: '#333' },
+  estimateValue: { fontSize: 12, color: '#333' },
+  divider: { borderTopWidth: 1, borderTopColor: '#ddd', marginVertical: 8 },
+  totalLabel: { fontSize: 13, fontWeight: '700', color: '#111' },
+  totalValue: { fontSize: 13, fontWeight: '700', color: '#EF4444' },
+
+  // Remarks
   remarksBox: {
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#333',
-    borderRadius: 4,
-    padding: 12,
-    backgroundColor: '#f9f9f9',
+    borderWidth: 1, borderColor: '#ccc', borderLeftWidth: 4, borderLeftColor: '#444',
+    borderRadius: 4, padding: 10, backgroundColor: '#f9f9f9',
   },
-  remarksText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#222',
-  },
-  signRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 30,
-  },
-  signBox: {
-    width: '30%',
-    alignItems: 'center',
-  },
-  signLine: {
-    height: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
-    marginBottom: 6,
-    width: '100%',
-  },
-  signLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 10,
-  },
+  remarksText: { fontSize: 11, lineHeight: 18, color: '#222' },
+
+  // Signatures
+  signRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 28 },
+  signBox: { width: '30%', alignItems: 'center' },
+  signLine: { height: 48, borderBottomWidth: 1, borderBottomColor: '#000', marginBottom: 6, width: '100%' },
+  signLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+
+  // Buttons
+  actionButtons: { flexDirection: 'row', marginTop: 16, gap: 10 },
   actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EF4444',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 8, gap: 8,
   },
-  printButton: {
-    backgroundColor: '#374151',
-  },
-  pdfButton: {
-    backgroundColor: '#059669',
-  },
-  emailButton: {
-    backgroundColor: '#2563EB',
-  },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#666',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#EF4444',
-    marginBottom: 16,
-  },
-  backButton: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  printButton: { backgroundColor: '#374151' },
+  emailButton: { backgroundColor: '#2563EB' },
+  actionText: { fontSize: 13, fontWeight: '600', color: '#fff' },
+
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  loadingText: { marginTop: 12, color: '#666' },
+  errorText: { fontSize: 16, color: '#EF4444', marginBottom: 16 },
+  backButton: { backgroundColor: '#EF4444', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  backButtonText: { color: '#fff', fontWeight: '600' },
 });

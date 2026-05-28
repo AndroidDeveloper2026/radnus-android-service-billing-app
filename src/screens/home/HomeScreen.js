@@ -159,7 +159,7 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Job Sheets</Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('JobSheet')}
+              onPress={() => navigation.navigate('JobSheet', {screen: 'SearchJobSheet', })}  // navigation.navigate('JobSheet') 
               style={styles.viewAllLink}
             >
               <Text style={styles.viewAllText}>View All</Text>

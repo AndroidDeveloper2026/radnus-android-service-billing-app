@@ -1,7 +1,7 @@
 // src/utils/api.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '@env'; 
+import { API_BASE_URL } from '@env';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -18,6 +18,7 @@ apiClient.interceptors.request.use(async (config) => {
 });
 
 // ---------- Transformers ----------
+// Raw transformer — keeps IDs as-is (used internally)
 const transformJobToFrontend = (job) => ({
   id: job._id,
   jobNo: job.jobSheetNo,
@@ -26,8 +27,11 @@ const transformJobToFrontend = (job) => ({
   altContact: job.customer?.altContact || '',
   address: job.customer?.address || '',
   email: job.customer?.email || '',
+  // Keep both raw ID and resolved name fields
   makeId: job.device?.make || '',
   modelId: job.device?.model || '',
+  makeName: '',   // will be resolved after fetch
+  modelName: '',  // will be resolved after fetch
   imei: job.device?.imei || '',
   warranty: job.device?.warranty || 'No Warranty',
   patternPin: job.device?.pattern || '',
@@ -36,6 +40,7 @@ const transformJobToFrontend = (job) => ({
   accessoriesReceived: job.accessories || [],
   batteryNumber: '',
   engineerId: job.service?.engineer || '',
+  engineerName: '', // will be resolved after fetch
   dealerName: job.service?.dealer || '',
   drawerId: job.service?.drawer || '',
   serviceCharges: job.service?.serviceCharge || 0,
@@ -50,6 +55,55 @@ const transformJobToFrontend = (job) => ({
   savedDate: job.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
   isInvoiced: job.isInvoiced || false,
 });
+
+// Resolve make/model/engineer IDs to names
+const resolveJobNames = async (job) => {
+  try {
+    const [makesRes, engineersRes] = await Promise.all([
+      apiClient.get('/api/makes'),
+      apiClient.get('/api/engineers'),
+    ]);
+
+    const makes = makesRes.data || [];
+    const engineers = engineersRes.data || [];
+
+    // Resolve make name
+    const makeObj = makes.find(m => m._id === job.makeId || m.name === job.makeId);
+    const makeName = makeObj?.name || job.makeId || '';
+
+    // Resolve model name — fetch models by make name
+    let modelName = job.modelId || '';
+    if (makeObj) {
+      try {
+        const modelsRes = await apiClient.get(`/api/models/${encodeURIComponent(makeObj.name)}`);
+        const models = modelsRes.data || [];
+        const modelObj = models.find(m => m._id === job.modelId || m.name === job.modelId);
+        modelName = modelObj?.name || job.modelId || '';
+      } catch (e) {
+        // If model fetch fails, keep raw value
+      }
+    }
+
+    // Resolve engineer name
+    const engObj = engineers.find(e => e._id === job.engineerId || e.name === job.engineerId);
+    const engineerName = engObj?.name || job.engineerId || '';
+
+    return {
+      ...job,
+      makeName,
+      modelName,
+      engineerName,
+    };
+  } catch (e) {
+    // If resolution fails, fall back to raw IDs
+    return {
+      ...job,
+      makeName: job.makeId || '',
+      modelName: job.modelId || '',
+      engineerName: job.engineerId || '',
+    };
+  }
+};
 
 const transformJobToBackend = (jobData, currentUser) => ({
   jobSheetNo: jobData.jobNo || '',
@@ -125,33 +179,33 @@ export const api = {
     if (filters.toDate) params.append('toDate', filters.toDate);
     if (filters.engineerId) params.append('engineer', filters.engineerId);
     const response = await apiClient.get(`/api/jobsheets/filter?${params.toString()}`);
-    return response.data.map(transformJobToFrontend);
+    // For list view — resolve names for all jobs in parallel
+    const rawJobs = response.data.map(transformJobToFrontend);
+    const resolved = await Promise.all(rawJobs.map(resolveJobNames));
+    return resolved;
   },
 
   getJobById: async (id) => {
     const response = await apiClient.get(`/api/jobsheets/${id}`);
-    return transformJobToFrontend(response.data);
+    const raw = transformJobToFrontend(response.data);
+    // Resolve names for detail/bill views
+    return await resolveJobNames(raw);
   },
 
   createJob: async (jobData) => {
-    // 1. Get the next job number from the backend
     let nextJobNo;
     try {
       const nextRes = await apiClient.get('/api/jobsheets/next-number');
       nextJobNo = nextRes.data.next;
     } catch (err) {
-      console.warn('Failed to fetch next job number, using fallback:', err);
       nextJobNo = `JS-${Date.now()}`;
     }
 
-    // 2. Merge the job number into the data
     const dataWithNo = { ...jobData, jobNo: nextJobNo };
-
     const userStr = await AsyncStorage.getItem('@radnus_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const backendData = transformJobToBackend(dataWithNo, user);
-    
-    // 3. Stringify nested objects as required by the backend
+
     const payload = {
       ...backendData,
       customer: JSON.stringify(backendData.customer),
@@ -163,19 +217,18 @@ export const api = {
       spareItems: JSON.stringify(backendData.spareItems),
       createdBy: JSON.stringify(backendData.createdBy),
     };
-    
-    // Ensure jobSheetNo is included
     payload.jobSheetNo = nextJobNo;
-    
+
     const response = await apiClient.post('/api/jobsheets', payload);
-    return transformJobToFrontend(response.data);
+    const raw = transformJobToFrontend(response.data);
+    return await resolveJobNames(raw);
   },
 
   updateJob: async (id, jobData) => {
     const userStr = await AsyncStorage.getItem('@radnus_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const backendData = transformJobToBackend(jobData, user);
-    
+
     const payload = {
       ...backendData,
       customer: JSON.stringify(backendData.customer),
@@ -187,11 +240,11 @@ export const api = {
       spareItems: JSON.stringify(backendData.spareItems),
       createdBy: JSON.stringify(backendData.createdBy),
     };
-    
     if (!payload.jobSheetNo) delete payload.jobSheetNo;
-    
+
     const response = await apiClient.put(`/api/jobsheets/${id}`, payload);
-    return transformJobToFrontend(response.data);
+    const raw = transformJobToFrontend(response.data);
+    return await resolveJobNames(raw);
   },
 
   deleteJob: async (id) => {
@@ -220,6 +273,10 @@ export const api = {
   deleteEngineer: async (id) => {
     await apiClient.delete(`/api/engineers/${id}`);
   },
+  updateEngineer: async (id, name) => {
+    const response = await apiClient.put(`/api/engineers/${id}`, { name });
+    return response.data;
+  },
 
   // Makes
   getMakes: async () => {
@@ -234,6 +291,26 @@ export const api = {
     await apiClient.delete(`/api/makes/${id}`);
   },
 
+  // Models
+  getModels: async () => {
+    const makes = await api.getMakes();
+    let allModels = [];
+    for (const make of makes) {
+      try {
+        const res = await apiClient.get(`/api/models/${encodeURIComponent(make.name)}`);
+        const modelsWithMakeId = res.data.map(m => ({
+          _id: m._id,
+          id: m._id,
+          name: m.name,
+          makeId: make.id,
+        }));
+        allModels.push(...modelsWithMakeId);
+      } catch (err) {
+        console.warn(`Failed to fetch models for make ${make.name}:`, err);
+      }
+    }
+    return allModels;
+  },
   addModel: async (makeId, name) => {
     const makes = await api.getMakes();
     const make = makes.find(m => m.id === makeId);
@@ -283,33 +360,11 @@ export const api = {
   deleteUser: async (id) => {
     await apiClient.delete(`/api/users/${id}`);
   },
-  updateEngineer: async (id, name) => {
-    const response = await apiClient.put(`/api/engineers/${id}`, { name });
-    return response.data;
-  },
+
   getUserReport: async (searchTerm = '') => {
     const params = new URLSearchParams();
     if (searchTerm) params.append('jobSheetNo', searchTerm);
     const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
     return response.data;
   },
-  getModels: async () => {
-  const makes = await api.getMakes();
-  let allModels = [];
-  for (const make of makes) {
-    try {
-      const res = await apiClient.get(`/api/models/${encodeURIComponent(make.name)}`);
-      const modelsWithMakeId = res.data.map(m => ({
-        _id: m._id,
-        id: m._id,
-        name: m.name,
-        makeId: make.id,
-      }));
-      allModels.push(...modelsWithMakeId);
-    } catch (err) {
-      console.warn(`Failed to fetch models for make ${make.name}:`, err);
-    }
-  }
-  return allModels;
-},
 };
