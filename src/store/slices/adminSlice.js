@@ -7,7 +7,7 @@ const mapId = (item) => {
   return { ...item, id: item._id || item.id };
 };
 
-// ─── Makes ───────────────────────────────────────────────
+// Makes
 export const fetchMakes = createAsyncThunk('admin/fetchMakes', async (_, { rejectWithValue }) => {
   try {
     const data = await api.getMakes();
@@ -16,7 +16,6 @@ export const fetchMakes = createAsyncThunk('admin/fetchMakes', async (_, { rejec
     return rejectWithValue(error.message);
   }
 });
-
 export const addMake = createAsyncThunk('admin/addMake', async (name, { rejectWithValue }) => {
   try {
     const data = await api.addMake(name);
@@ -25,7 +24,6 @@ export const addMake = createAsyncThunk('admin/addMake', async (name, { rejectWi
     return rejectWithValue(error.message);
   }
 });
-
 export const deleteMake = createAsyncThunk('admin/deleteMake', async (id, { rejectWithValue }) => {
   try {
     await api.deleteMake(id);
@@ -35,7 +33,7 @@ export const deleteMake = createAsyncThunk('admin/deleteMake', async (id, { reje
   }
 });
 
-// ─── Models ──────────────────────────────────────────────
+// Models
 export const fetchModels = createAsyncThunk('admin/fetchModels', async (_, { rejectWithValue }) => {
   try {
     const data = await api.getModels();
@@ -44,7 +42,6 @@ export const fetchModels = createAsyncThunk('admin/fetchModels', async (_, { rej
     return rejectWithValue(error.message);
   }
 });
-
 export const addModel = createAsyncThunk('admin/addModel', async ({ makeId, name }, { rejectWithValue }) => {
   try {
     const data = await api.addModel(makeId, name);
@@ -53,7 +50,6 @@ export const addModel = createAsyncThunk('admin/addModel', async ({ makeId, name
     return rejectWithValue(error.message);
   }
 });
-
 export const deleteModel = createAsyncThunk('admin/deleteModel', async (id, { rejectWithValue }) => {
   try {
     await api.deleteModel(id);
@@ -63,7 +59,7 @@ export const deleteModel = createAsyncThunk('admin/deleteModel', async (id, { re
   }
 });
 
-// ─── Faults ──────────────────────────────────────────────
+// Faults
 export const fetchFaults = createAsyncThunk('admin/fetchFaults', async (_, { rejectWithValue }) => {
   try {
     const data = await api.getFaults();
@@ -72,7 +68,6 @@ export const fetchFaults = createAsyncThunk('admin/fetchFaults', async (_, { rej
     return rejectWithValue(error.message);
   }
 });
-
 export const addFault = createAsyncThunk('admin/addFault', async (name, { rejectWithValue }) => {
   try {
     const data = await api.addFault(name);
@@ -81,7 +76,6 @@ export const addFault = createAsyncThunk('admin/addFault', async (name, { reject
     return rejectWithValue(error.message);
   }
 });
-
 export const deleteFault = createAsyncThunk('admin/deleteFault', async (id, { rejectWithValue }) => {
   try {
     await api.deleteFault(id);
@@ -91,7 +85,7 @@ export const deleteFault = createAsyncThunk('admin/deleteFault', async (id, { re
   }
 });
 
-// ─── Drawers ─────────────────────────────────────────────
+// Drawers
 export const fetchDrawers = createAsyncThunk('admin/fetchDrawers', async (_, { rejectWithValue }) => {
   try {
     const data = await api.getDrawers();
@@ -100,7 +94,6 @@ export const fetchDrawers = createAsyncThunk('admin/fetchDrawers', async (_, { r
     return rejectWithValue(error.message);
   }
 });
-
 export const addDrawer = createAsyncThunk('admin/addDrawer', async (name, { rejectWithValue }) => {
   try {
     const data = await api.addDrawer(name);
@@ -109,7 +102,6 @@ export const addDrawer = createAsyncThunk('admin/addDrawer', async (name, { reje
     return rejectWithValue(error.message);
   }
 });
-
 export const deleteDrawer = createAsyncThunk('admin/deleteDrawer', async (id, { rejectWithValue }) => {
   try {
     await api.deleteDrawer(id);
@@ -119,7 +111,7 @@ export const deleteDrawer = createAsyncThunk('admin/deleteDrawer', async (id, { 
   }
 });
 
-// ─── Engineers ───────────────────────────────────────────
+// Engineers
 export const fetchEngineers = createAsyncThunk('admin/fetchEngineers', async (_, { rejectWithValue }) => {
   try {
     const data = await api.getEngineers();
@@ -128,7 +120,6 @@ export const fetchEngineers = createAsyncThunk('admin/fetchEngineers', async (_,
     return rejectWithValue(error.message);
   }
 });
-
 export const addEngineer = createAsyncThunk('admin/addEngineer', async (name, { rejectWithValue }) => {
   try {
     const data = await api.addEngineer(name);
@@ -137,7 +128,6 @@ export const addEngineer = createAsyncThunk('admin/addEngineer', async (name, { 
     return rejectWithValue(error.message);
   }
 });
-
 export const deleteEngineer = createAsyncThunk('admin/deleteEngineer', async (id, { rejectWithValue }) => {
   try {
     await api.deleteEngineer(id);
@@ -146,7 +136,6 @@ export const deleteEngineer = createAsyncThunk('admin/deleteEngineer', async (id
     return rejectWithValue(error.message);
   }
 });
-
 export const updateEngineer = createAsyncThunk('admin/updateEngineer', async ({ id, name }, { rejectWithValue }) => {
   try {
     const data = await api.updateEngineer(id, name);
@@ -156,123 +145,42 @@ export const updateEngineer = createAsyncThunk('admin/updateEngineer', async ({ 
   }
 });
 
-// ─── Slice ───────────────────────────────────────────────
 const adminSlice = createSlice({
   name: 'admin',
-  initialState: {
-    engineers: [],
-    makes: [],
-    models: [],
-    faults: [],
-    drawers: [],
-    loading: false,
-    error: null,
-  },
+  initialState: { engineers: [], makes: [], models: [], faults: [], drawers: [], loading: false, error: null },
   extraReducers: (builder) => {
     builder
       // Makes
       .addCase(fetchMakes.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchMakes.fulfilled, (state, action) => {
-        state.loading = false;
-        state.makes = action.payload;
-      })
-      .addCase(fetchMakes.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addMake.fulfilled, (state, action) => {
-        state.makes.push(action.payload);
-      })
-      .addCase(deleteMake.fulfilled, (state, action) => {
-        state.makes = state.makes.filter(m => m.id !== action.payload);
-      })
-      .addCase(deleteMake.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-
+      .addCase(fetchMakes.fulfilled, (state, action) => { state.loading = false; state.makes = action.payload; })
+      .addCase(fetchMakes.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(addMake.fulfilled, (state, action) => { state.makes.push(action.payload); })
+      .addCase(deleteMake.fulfilled, (state, action) => { state.makes = state.makes.filter(m => m.id !== action.payload); })
       // Models
       .addCase(fetchModels.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchModels.fulfilled, (state, action) => {
-        state.loading = false;
-        state.models = action.payload;
-      })
-      .addCase(fetchModels.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addModel.fulfilled, (state, action) => {
-        state.models.push(action.payload);
-      })
-      .addCase(deleteModel.fulfilled, (state, action) => {
-        state.models = state.models.filter(m => m.id !== action.payload);
-      })
-      .addCase(deleteModel.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-
+      .addCase(fetchModels.fulfilled, (state, action) => { state.loading = false; state.models = action.payload; })
+      .addCase(fetchModels.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(addModel.fulfilled, (state, action) => { state.models.push(action.payload); })
+      .addCase(deleteModel.fulfilled, (state, action) => { state.models = state.models.filter(m => m.id !== action.payload); })
       // Faults
       .addCase(fetchFaults.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchFaults.fulfilled, (state, action) => {
-        state.loading = false;
-        state.faults = action.payload;
-      })
-      .addCase(fetchFaults.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addFault.fulfilled, (state, action) => {
-        state.faults.push(action.payload);
-      })
-      .addCase(deleteFault.fulfilled, (state, action) => {
-        state.faults = state.faults.filter(f => f.id !== action.payload);
-      })
-      .addCase(deleteFault.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-
+      .addCase(fetchFaults.fulfilled, (state, action) => { state.loading = false; state.faults = action.payload; })
+      .addCase(fetchFaults.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(addFault.fulfilled, (state, action) => { state.faults.push(action.payload); })
+      .addCase(deleteFault.fulfilled, (state, action) => { state.faults = state.faults.filter(f => f.id !== action.payload); })
       // Drawers
       .addCase(fetchDrawers.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchDrawers.fulfilled, (state, action) => {
-        state.loading = false;
-        state.drawers = action.payload;
-      })
-      .addCase(fetchDrawers.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addDrawer.fulfilled, (state, action) => {
-        state.drawers.push(action.payload);
-      })
-      .addCase(deleteDrawer.fulfilled, (state, action) => {
-        state.drawers = state.drawers.filter(d => d.id !== action.payload);
-      })
-      .addCase(deleteDrawer.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-
+      .addCase(fetchDrawers.fulfilled, (state, action) => { state.loading = false; state.drawers = action.payload; })
+      .addCase(fetchDrawers.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(addDrawer.fulfilled, (state, action) => { state.drawers.push(action.payload); })
+      .addCase(deleteDrawer.fulfilled, (state, action) => { state.drawers = state.drawers.filter(d => d.id !== action.payload); })
       // Engineers
       .addCase(fetchEngineers.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchEngineers.fulfilled, (state, action) => {
-        state.loading = false;
-        state.engineers = action.payload;
-      })
-      .addCase(fetchEngineers.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addEngineer.fulfilled, (state, action) => {
-        state.engineers.push(action.payload);
-      })
-      .addCase(deleteEngineer.fulfilled, (state, action) => {
-        state.engineers = state.engineers.filter(e => e.id !== action.payload);
-      })
-      .addCase(deleteEngineer.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-      .addCase(updateEngineer.fulfilled, (state, action) => {
-        const index = state.engineers.findIndex(e => e.id === action.payload.id);
-        if (index !== -1) state.engineers[index] = action.payload;
-      });
+      .addCase(fetchEngineers.fulfilled, (state, action) => { state.loading = false; state.engineers = action.payload; })
+      .addCase(fetchEngineers.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(addEngineer.fulfilled, (state, action) => { state.engineers.push(action.payload); })
+      .addCase(deleteEngineer.fulfilled, (state, action) => { state.engineers = state.engineers.filter(e => e.id !== action.payload); })
+      .addCase(updateEngineer.fulfilled, (state, action) => { const idx = state.engineers.findIndex(e => e.id === action.payload.id); if (idx !== -1) state.engineers[idx] = action.payload; });
   },
 });
 

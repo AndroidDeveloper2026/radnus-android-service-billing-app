@@ -97,48 +97,13 @@ const AddItemModal = ({ visible, type, makes, selectedMakeId, onSelectMake, onSu
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modal: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDERS.radius.lg,
-    padding: SPACING.lg,
-    width: '85%',
-    ...SHADOWS.large,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  title: {
-    ...FONTS.bold,
-    fontSize: 18,
-    color: COLORS.gray900,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-    borderRadius: BORDERS.radius.md,
-    padding: SPACING.md,
-    marginVertical: SPACING.md,
-    ...FONTS.regular,
-    fontSize: 16,
-    backgroundColor: COLORS.white,
-  },
-  buttons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-  },
-  button: {
-    flex: 1,
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modal: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.lg, width: '85%', ...SHADOWS.large },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+  title: { ...FONTS.bold, fontSize: 18, color: COLORS.gray900 },
+  input: { borderWidth: 1, borderColor: COLORS.gray200, borderRadius: BORDERS.radius.md, padding: SPACING.md, marginVertical: SPACING.md, ...FONTS.regular, fontSize: 16, backgroundColor: COLORS.white },
+  buttons: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.sm },
+  button: { flex: 1 },
 });
 
 export default AddItemModal;

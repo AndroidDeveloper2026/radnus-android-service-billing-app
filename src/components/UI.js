@@ -108,7 +108,7 @@ export const Input = ({ label, value, onChangeText, placeholder, secureTextEntry
   );
 };
 
-// ========== SELECT MODAL ==========
+// ========== SELECT MODAL (fixed keyExtractor) ==========
 export const SelectModal = ({ label, value, options, onSelect, placeholder, required, error }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const selectedOption = options.find(opt => opt.id === value);
@@ -137,7 +137,7 @@ export const SelectModal = ({ label, value, options, onSelect, placeholder, requ
               </View>
               <FlatList
                 data={options}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.id || item._id}   // ✅ unique key
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.modalItem}
@@ -240,223 +240,38 @@ const getStatusColor = (status) => {
 
 // ========== STYLES ==========
 const styles = StyleSheet.create({
-  // Button
-  button: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: BORDERS.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.small,
-  },
-  buttonText: {
-    ...FONTS.semibold,
-    fontSize: 16,
-  },
-  // Input
-  label: {
-    ...FONTS.medium,
-    fontSize: 14,
-    marginBottom: SPACING.xs,
-    color: COLORS.gray700,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: BORDERS.radius.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.white,
-    height: 48,
-  },
-  input: {
-    ...FONTS.regular,
-    fontSize: 16,
-    color: COLORS.gray900,
-    paddingVertical: SPACING.sm,
-  },
-  errorText: {
-    ...FONTS.regular,
-    fontSize: 12,
-    color: COLORS.error,
-    marginTop: SPACING.xs,
-  },
-  // Select Modal
-  selectTrigger: {
-    borderWidth: 1,
-    borderRadius: BORDERS.radius.md,
-    padding: SPACING.md,
-    backgroundColor: COLORS.white,
-    height: 48,
-    justifyContent: 'center',
-  },
-  selectText: {
-    ...FONTS.regular,
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: BORDERS.radius.xl,
-    borderTopRightRadius: BORDERS.radius.xl,
-    maxHeight: '80%',
-    ...SHADOWS.large,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-  },
-  modalTitle: {
-    ...FONTS.semibold,
-    fontSize: 18,
-    color: COLORS.gray900,
-  },
-  modalItem: {
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray100,
-  },
-  modalItemText: {
-    ...FONTS.regular,
-    fontSize: 16,
-    color: COLORS.gray700,
-  },
-  // Checkbox
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: SPACING.lg,
-    marginBottom: SPACING.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    marginRight: SPACING.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: COLORS.primary,
-  },
-  checkboxInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 3,
-    backgroundColor: COLORS.white,
-  },
-  checkboxLabel: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray700,
-  },
-  // Card
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDERS.radius.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
-  cardTitle: {
-    ...FONTS.bold,
-    fontSize: 18,
-    color: COLORS.gray900,
-    marginBottom: SPACING.md,
-  },
-  // Chip
-  chip: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDERS.radius.sm,
-    alignSelf: 'flex-start',
-  },
-  chipText: {
-    ...FONTS.medium,
-    fontSize: 12,
-    color: COLORS.white,
-  },
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-    ...SHADOWS.small,
-  },
-  headerIcon: {
-    padding: SPACING.sm,
-  },
-  headerTitle: {
-    ...FONTS.bold,
-    fontSize: 20,
-    color: COLORS.gray900,
-  },
-  // Info Row
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray100,
-  },
-  infoLabel: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray500,
-  },
-  infoValue: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.gray900,
-  },
-  // Empty State
-  emptyState: {
-    padding: SPACING.xxxl,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray400,
-    marginTop: SPACING.md,
-  },
-  // Loading
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  loadingCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDERS.radius.lg,
-    padding: SPACING.xl,
-    alignItems: 'center',
-    ...SHADOWS.large,
-  },
-  loadingText: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.gray700,
-    marginTop: SPACING.md,
-  },
+  button: { paddingVertical: SPACING.md, paddingHorizontal: SPACING.lg, borderRadius: BORDERS.radius.md, alignItems: 'center', justifyContent: 'center', ...SHADOWS.small },
+  buttonText: { ...FONTS.semibold, fontSize: 16 },
+  label: { ...FONTS.medium, fontSize: 14, marginBottom: SPACING.xs, color: COLORS.gray700 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: BORDERS.radius.md, paddingHorizontal: SPACING.md, backgroundColor: COLORS.white, height: 48 },
+  input: { ...FONTS.regular, fontSize: 16, color: COLORS.gray900, paddingVertical: SPACING.sm },
+  errorText: { ...FONTS.regular, fontSize: 12, color: COLORS.error, marginTop: SPACING.xs },
+  selectTrigger: { borderWidth: 1, borderRadius: BORDERS.radius.md, padding: SPACING.md, backgroundColor: COLORS.white, height: 48, justifyContent: 'center' },
+  selectText: { ...FONTS.regular, fontSize: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: COLORS.white, borderTopLeftRadius: BORDERS.radius.xl, borderTopRightRadius: BORDERS.radius.xl, maxHeight: '80%', ...SHADOWS.large },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.gray200 },
+  modalTitle: { ...FONTS.semibold, fontSize: 18, color: COLORS.gray900 },
+  modalItem: { padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+  modalItemText: { ...FONTS.regular, fontSize: 16, color: COLORS.gray700 },
+  checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.lg, marginBottom: SPACING.sm },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: COLORS.primary, marginRight: SPACING.sm, justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: COLORS.primary },
+  checkboxInner: { width: 10, height: 10, borderRadius: 3, backgroundColor: COLORS.white },
+  checkboxLabel: { ...FONTS.regular, fontSize: 14, color: COLORS.gray700 },
+  card: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.lg, marginBottom: SPACING.lg },
+  cardTitle: { ...FONTS.bold, fontSize: 18, color: COLORS.gray900, marginBottom: SPACING.md },
+  chip: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, borderRadius: BORDERS.radius.sm, alignSelf: 'flex-start' },
+  chipText: { ...FONTS.medium, fontSize: 12, color: COLORS.white },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.gray200, ...SHADOWS.small },
+  headerIcon: { padding: SPACING.sm },
+  headerTitle: { ...FONTS.bold, fontSize: 20, color: COLORS.gray900 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+  infoLabel: { ...FONTS.regular, fontSize: 14, color: COLORS.gray500 },
+  infoValue: { ...FONTS.medium, fontSize: 14, color: COLORS.gray900 },
+  emptyState: { padding: SPACING.xxxl, alignItems: 'center' },
+  emptyStateText: { ...FONTS.regular, fontSize: 14, color: COLORS.gray400, marginTop: SPACING.md },
+  loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  loadingCard: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.xl, alignItems: 'center', ...SHADOWS.large },
+  loadingText: { ...FONTS.medium, fontSize: 14, color: COLORS.gray700, marginTop: SPACING.md },
 });

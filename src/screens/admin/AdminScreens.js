@@ -4,6 +4,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Alert,
   StyleSheet,
@@ -60,13 +61,22 @@ export default function AdminScreens() {
   const [selectedMakeForModel, setSelectedMakeForModel] = useState('');
   const [selectedMakeId, setSelectedMakeId] = useState('');
 
-  // Load all data once on mount
   useEffect(() => {
     dispatch(fetchMakes());
     dispatch(fetchModels());
     dispatch(fetchFaults());
     dispatch(fetchDrawers());
     dispatch(fetchEngineers());
+  }, []);
+
+  const refreshMaster = useCallback((type) => {
+    switch (type) {
+      case 'make': dispatch(fetchMakes()); break;
+      case 'model': dispatch(fetchModels()); break;
+      case 'fault': dispatch(fetchFaults()); break;
+      case 'drawer': dispatch(fetchDrawers()); break;
+      case 'engineer': dispatch(fetchEngineers()); break;
+    }
   }, [dispatch]);
 
   const toggleSection = (key) => {
@@ -100,34 +110,36 @@ export default function AdminScreens() {
         case 'make':
           await dispatch(addMake(inputValue.trim())).unwrap();
           toast.show('Make added', { type: 'success' });
+          refreshMaster('make');
           break;
         case 'model':
           await dispatch(addModel({ makeId: selectedMakeForModel, name: inputValue.trim() })).unwrap();
           toast.show('Model added', { type: 'success' });
+          refreshMaster('model');
           break;
         case 'fault':
           await dispatch(addFault(inputValue.trim())).unwrap();
           toast.show('Fault added', { type: 'success' });
+          refreshMaster('fault');
           break;
         case 'drawer':
           await dispatch(addDrawer(inputValue.trim())).unwrap();
           toast.show('Drawer added', { type: 'success' });
+          refreshMaster('drawer');
           break;
         case 'engineer':
           await dispatch(addEngineer(inputValue.trim())).unwrap();
           toast.show('Engineer added', { type: 'success' });
+          refreshMaster('engineer');
           break;
-        default:
-          return false;
       }
       return true;
     } catch (error) {
       toast.show(error.message || 'Failed to add', { type: 'danger' });
       return false;
     }
-  }, [dispatch, modalType, selectedMakeForModel, toast]);
+  }, [dispatch, modalType, selectedMakeForModel, toast, refreshMaster]);
 
-  // FIX: handleDelete now correctly receives type, id, name
   const handleDelete = useCallback((type, id, name) => {
     Alert.alert(
       'Delete',
@@ -142,8 +154,8 @@ export default function AdminScreens() {
               switch (type) {
                 case 'make':
                   await dispatch(deleteMake(id)).unwrap();
-                  if (selectedMakeId === id) setSelectedMakeId('');
                   toast.show('Make deleted', { type: 'success' });
+                  if (selectedMakeId === id) setSelectedMakeId('');
                   break;
                 case 'model':
                   await dispatch(deleteModel(id)).unwrap();
@@ -161,13 +173,8 @@ export default function AdminScreens() {
                   await dispatch(deleteEngineer(id)).unwrap();
                   toast.show('Engineer deleted', { type: 'success' });
                   break;
-                default:
-                  toast.show('Unknown type', { type: 'danger' });
               }
-              // Redux state is updated optimistically by the slice reducer —
-              // no manual re-fetch needed. The list updates automatically.
             } catch (error) {
-              console.error('Delete error:', error);
               toast.show(error.message || 'Failed to delete', { type: 'danger' });
             }
           },
@@ -182,6 +189,7 @@ export default function AdminScreens() {
         try {
           await dispatch(updateEngineer({ id, name: newName })).unwrap();
           toast.show('Engineer updated', { type: 'success' });
+          refreshMaster('engineer');
         } catch (error) {
           toast.show('Update failed', { type: 'danger' });
         }
@@ -189,7 +197,6 @@ export default function AdminScreens() {
     });
   };
 
-  // Filtered data
   const filteredMakes = useMemo(() => {
     if (!makeSearch) return makes;
     return makes.filter(m => m.name?.toLowerCase().includes(makeSearch.toLowerCase()));
@@ -217,19 +224,25 @@ export default function AdminScreens() {
     return engineers.filter(e => e.name?.toLowerCase().includes(engineerSearch.toLowerCase()));
   }, [engineers, engineerSearch]);
 
-  // FIX: renderItemRow receives type directly — not from FlatList's renderItem signature
-  const renderItemRow = (type) => ({ item }) => {
+  // ✅ renderItemRow using map() — no nested FlatList
+  const renderItemRow = (item, type) => {
     const isEngineer = type === 'engineer';
     return (
-      <View style={styles.listItem}>
+      <View key={String(item.id)} style={styles.listItem}>
         <Text style={styles.itemName}>{item.name}</Text>
         <View style={styles.actionButtons}>
           {isEngineer && (
-            <TouchableOpacity onPress={() => handleEditEngineer(item.id, item.name)} style={styles.editButton}>
+            <TouchableOpacity
+              onPress={() => handleEditEngineer(item.id, item.name)}
+              style={styles.editButton}
+            >
               <Edit2 size={18} color={COLORS.info} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => handleDelete(type, item.id, item.name)} style={styles.deleteButton}>
+          <TouchableOpacity
+            onPress={() => handleDelete(type, item.id, item.name)}
+            style={styles.deleteButton}
+          >
             <Trash2 size={20} color={COLORS.error} />
           </TouchableOpacity>
         </View>
@@ -286,20 +299,18 @@ export default function AdminScreens() {
         return null;
     }
 
-    const addLabel = {
-      make: 'Add Make', model: 'Add Model', fault: 'Add Fault',
-      drawer: 'Add Drawer', engineer: 'Add Engineer',
-    }[section.type] || 'Add Item';
-
     return (
       <View style={styles.sectionCard} key={section.key}>
         <TouchableOpacity style={styles.sectionHeader} onPress={() => toggleSection(section.key)}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
-          {isExpanded ? <ChevronUp size={22} color={COLORS.gray600} /> : <ChevronDown size={22} color={COLORS.gray600} />}
+          {isExpanded
+            ? <ChevronUp size={22} color={COLORS.gray600} />
+            : <ChevronDown size={22} color={COLORS.gray600} />}
         </TouchableOpacity>
 
         {isExpanded && (
           <View style={styles.sectionContent}>
+            {/* Search Bar */}
             <View style={styles.searchContainer}>
               <Search size={18} color={COLORS.gray400} />
               <TextInput
@@ -310,17 +321,29 @@ export default function AdminScreens() {
                 placeholderTextColor={COLORS.gray400}
               />
             </View>
+
             {extraComponent}
-            <FlatList
-              data={data}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItemRow(section.type)}  // FIX: pass type via closure
-              ListEmptyComponent={<Text style={styles.emptyText}>No items found</Text>}
-              scrollEnabled={false}
-            />
-            <TouchableOpacity style={styles.addButton} onPress={() => openAddModal(addModalType, selectedMakeId)}>
+
+            {/* ✅ FIX: map() instead of nested FlatList */}
+            <View>
+              {data.length === 0
+                ? <Text style={styles.emptyText}>No items found</Text>
+                : data.map(item => renderItemRow(item, section.type))
+              }
+            </View>
+
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => openAddModal(addModalType, selectedMakeId)}
+            >
               <Plus size={18} color={COLORS.white} />
-              <Text style={styles.addButtonText}>{addLabel}</Text>
+              <Text style={styles.addButtonText}>
+                Add {section.type === 'make' ? 'Make'
+                  : section.type === 'model' ? 'Model'
+                  : section.type === 'fault' ? 'Fault'
+                  : section.type === 'drawer' ? 'Drawer'
+                  : 'Engineer'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -332,17 +355,24 @@ export default function AdminScreens() {
     <View style={styles.container}>
       {isAdmin && (
         <View style={styles.adminHeader}>
-          <TouchableOpacity style={styles.adminNavButton} onPress={() => navigation.navigate('UserList')}>
+          <TouchableOpacity
+            style={styles.adminNavButton}
+            onPress={() => navigation.navigate('UserList')}
+          >
             <Users size={20} color={COLORS.white} />
             <Text style={styles.adminNavText}>User List</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.adminNavButton} onPress={() => navigation.navigate('UserReport')}>
+          <TouchableOpacity
+            style={styles.adminNavButton}
+            onPress={() => navigation.navigate('UserReport')}
+          >
             <FileText size={20} color={COLORS.white} />
             <Text style={styles.adminNavText}>User Report</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* ✅ Only ONE FlatList at the top level */}
       <FlatList
         data={SECTIONS}
         keyExtractor={(item) => item.key}
@@ -366,125 +396,24 @@ export default function AdminScreens() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.gray50,
-  },
-  adminHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.sm,
-    gap: SPACING.md,
-  },
-  adminNavButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDERS.radius.md,
-    gap: SPACING.sm,
-  },
-  adminNavText: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.white,
-  },
-  listContent: {
-    padding: SPACING.lg,
-    paddingTop: 16,
-  },
-  sectionCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDERS.radius.lg,
-    marginBottom: SPACING.lg,
-    ...SHADOWS.small,
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: SPACING.md,
-    backgroundColor: COLORS.white,
-  },
-  sectionTitle: {
-    ...FONTS.bold,
-    fontSize: 16,
-    color: COLORS.gray900,
-  },
-  sectionContent: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray100,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.gray50,
-    borderRadius: BORDERS.radius.md,
-    paddingHorizontal: SPACING.md,
-    marginVertical: SPACING.sm,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: SPACING.sm,
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray900,
-  },
-  filterSelect: {
-    marginVertical: SPACING.sm,
-  },
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray100,
-  },
-  itemName: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray700,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  editButton: {
-    marginRight: SPACING.sm,
-    padding: SPACING.xs,
-  },
-  deleteButton: {
-    padding: SPACING.xs,
-  },
-  emptyText: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray400,
-    textAlign: 'center',
-    paddingVertical: SPACING.md,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDERS.radius.md,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.md,
-    gap: SPACING.sm,
-  },
-  addButtonText: {
-    ...FONTS.semibold,
-    fontSize: 13,
-    color: COLORS.white,
-  },
+  container: { flex: 1, backgroundColor: COLORS.gray50 },
+  adminHeader: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: SPACING.lg, marginTop: SPACING.lg, marginBottom: SPACING.sm, gap: SPACING.md },
+  adminNavButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, paddingVertical: SPACING.sm, borderRadius: BORDERS.radius.md, gap: SPACING.sm },
+  adminNavText: { ...FONTS.medium, fontSize: 14, color: COLORS.white },
+  listContent: { padding: SPACING.lg, paddingTop: 0 },
+  sectionCard: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, marginBottom: SPACING.lg, ...SHADOWS.small, overflow: 'hidden' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.md, backgroundColor: COLORS.white },
+  sectionTitle: { ...FONTS.bold, fontSize: 16, color: COLORS.gray900 },
+  sectionContent: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.gray100 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.gray50, borderRadius: BORDERS.radius.md, paddingHorizontal: SPACING.md, marginVertical: SPACING.sm, height: 44 },
+  searchInput: { flex: 1, marginLeft: SPACING.sm, ...FONTS.regular, fontSize: 14, color: COLORS.gray900 },
+  filterSelect: { marginVertical: SPACING.sm },
+  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+  itemName: { ...FONTS.regular, fontSize: 14, color: COLORS.gray700 },
+  actionButtons: { flexDirection: 'row', alignItems: 'center' },
+  editButton: { marginRight: SPACING.sm, padding: SPACING.xs },
+  deleteButton: { padding: SPACING.xs },
+  emptyText: { ...FONTS.regular, fontSize: 14, color: COLORS.gray400, textAlign: 'center', paddingVertical: SPACING.md },
+  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: BORDERS.radius.md, paddingVertical: SPACING.sm, marginTop: SPACING.md, gap: SPACING.sm },
+  addButtonText: { ...FONTS.semibold, fontSize: 13, color: COLORS.white },
 });
