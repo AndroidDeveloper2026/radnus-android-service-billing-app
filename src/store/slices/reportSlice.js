@@ -1,277 +1,324 @@
+// src/store/slices/reportSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { api } from '../../utils/api';
 
 // ─── Date Formatter ───────────────────────────────────────────────────────────
 const formatDate = (value) => {
-  if (value === null || value === undefined) return '-';
+  if (!value || value === null || value === undefined) return '-';
+  
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return `${value.getDate()}/${value.getMonth() + 1}/${value.getFullYear()}`;
+  }
+  
   const str = String(value).trim();
-  if (!str || str === 'null' || str === 'undefined' || str === 'NaN') return '-';
+  if (!str || str === 'null' || str === 'undefined' || str === 'NaN' || str === 'Invalid Date') return '-';
 
-  // Already formatted: 1/6/2026
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) return str;
 
-  // ISO / timestamp: 2026-06-01T00:00:00.000Z  or  2026-06-01
-  if (/^\d{4}-\d{2}-\d{2}/.test(str) || /^\d{10,}$/.test(str)) {
-    try {
-      const d = new Date(str);
-      if (isNaN(d.getTime())) return str;
-      return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-    } catch {
-      return str;
-    }
-  }
-
-  // Generic parse
   try {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
       return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Date parsing failed for:', str);
+  }
 
   return str;
 };
 
-/** Returns 0 for null / undefined / NaN. */
 const safeNum = (val) => {
-  if (val === null || val === undefined || val === '' || val === 'null') return 0;
+  if (val === null || val === undefined || val === '' || val === 'null' || val === 'undefined') return 0;
   const n = Number(val);
-  return isNaN(n) ? 0 : n;
+  return isNaN(n) || !isFinite(n) ? 0 : n;
 };
 
-/** Returns fallback for null / undefined / 'null' / 'NaN'. */
 const safeStr = (val, fallback = '-') => {
   if (val === null || val === undefined) return fallback;
   if (Array.isArray(val)) {
-    return val.filter(Boolean).join(', ') || fallback;
+    const filtered = val.filter(v => v && v !== 'null' && v !== 'undefined');
+    return filtered.length ? filtered.join(', ') : fallback;
   }
   const s = String(val).trim();
   if (!s || s === 'null' || s === 'undefined' || s === 'NaN' || s === 'nan') return fallback;
   return s;
 };
 
-/**
- * Normalises a raw job object from the API so every field the UI needs
- * is guaranteed to exist, be the right type, and never be NaN or a raw ISO date.
- */
-const normaliseJob = (job) => {
-  if (!job) return {};
-  
-  // Handle nested objects
-  const customer = job.customer || {};
-  const device = job.device || {};
-  const service = job.service || {};
-  const createdBy = job.createdBy || {};
-  
-  return {
-    // ── identifiers
-    id:             job.id          ?? job._id          ?? '',
-    jobNo:          safeStr(job.jobSheetNo ?? job.jobNo ?? job.JobNo ?? job.job_no ?? job.jobNumber),
-    customerName:   safeStr(customer.name ?? job.customerName ?? job.CustomerName ?? job.customer_name ?? job.name),
-    contact:        safeStr(customer.contact ?? job.contact ?? job.Contact ?? job.phone ?? job.mobile),
-    altContact:     safeStr(customer.altContact ?? job.altContact ?? job.AltContact ?? job.alternateContact, '-'),
-    // ── device
-    makeId:         safeStr(device.make ?? job.makeId ?? job.Make ?? job.make ?? job.brand),
-    modelId:        safeStr(device.model ?? job.modelId ?? job.Model ?? job.model ?? job.deviceModel),
-    imei:           safeStr(device.imei ?? job.imei ?? job.IMEI ?? job.serial ?? job.serialNo),
-    warranty:       safeStr(device.warranty ?? job.warranty ?? job.Warranty ?? job.warrantyStatus, 'No Warranty'),
-    // ── assignment
-    status:         safeStr(device.mobileStatus ?? job.status ?? job.Status ?? job.jobStatus),
-    engineerId:     safeStr(service.engineer ?? job.engineerId ?? job.Engineer ?? job.engineer ?? job.technician, '-'),
-    dealerName:     safeStr(service.dealer ?? job.dealerName ?? job.Dealer ?? job.dealer ?? job.dealerId, '-'),
-    drawerId:       safeStr(service.drawer ?? job.drawerId ?? job.Drawer ?? job.drawer ?? job.drawerName, 'Booking'),
-    // ── charges (always numbers)
-    serviceCharges: safeNum(service.serviceCharge ?? job.serviceCharges ?? job.ServiceCharges ?? job.service_charges ?? job.serviceCharge ?? job.service ?? job.svcCharges),
-    spareCharges:   safeNum(service.spareCharge ?? job.spareCharges ?? job.SpareCharges ?? job.spare_charges ?? job.spareCharge ?? job.spare ?? job.partCharges),
-    // ── payment / condition
-    paymentMode:    safeStr(service.paymentMode ?? job.paymentMode ?? job.Payment ?? job.payment ?? job.paymentType, '-'),
-    problems:       safeStr(Array.isArray(job.visualIssues) ? job.visualIssues.filter(Boolean).join(', ') : (job.visualIssues ?? job.problems ?? job.Problems ?? job.problem ?? job.fault ?? job.issue), '-'),
-    physicalConditions: safeStr(
-      Array.isArray(job.physicalCondition) ? job.physicalCondition.join(', ') :
-      (job.physicalCondition ?? job.physicalConditions ?? job.physical_condition ?? job.PhysicalCondition ?? job.physCond ?? job.PhysCond), '-'
-    ),
-    accessories:    safeStr(Array.isArray(job.accessories) ? job.accessories.join(', ') : (job.accessories ?? job.Accessories), '-'),
-    remarks:        safeStr(service.remarks ?? job.remarks ?? job.Remarks ?? job.remark ?? job.note, '-'),
-    // ── dates (all formatted as D/M/YYYY)
-    savedDate:      formatDate(job.createdAt ?? job.savedDate ?? job.SavedDate ?? job.saved_date ?? job.created_at ?? job.receivedDate),
-    repairedDate:   formatDate(service.repairDate ?? job.repairedDate ?? job.RepairDate ?? job.repair_date ?? job.repairDate ?? job.dateRepaired),
-    deliveredDate:  formatDate(service.deliveryDate ?? job.deliveredDate ?? job.DeliveryDate ?? job.delivery_date ?? job.deliveryDate ?? job.dateDelivered),
-    // ── meta
-    createdBy:      safeStr(createdBy.username ?? createdBy.name ?? job.createdBy ?? job.CreatedBy ?? job.created_by ?? job.billingBy ?? job.billedBy, '-'),
-    spareItems:     Array.isArray(job.spareItems) ? job.spareItems : [],
-  };
-};
-
-// ─── API Helper ──────────────────────────────────────────────────────────────
-// Import your actual API utility here
-// import { api } from '../../utils/api';
-
-// Mock API for demonstration - replace with your actual API calls
-const api = {
-  getJobs: async (filters = {}) => {
-    // Your actual API call here
-    // const response = await fetch(`${API_URL}/api/jobsheets/filter?${params}`);
-    // const data = await response.json();
-    // return Array.isArray(data) ? data : (data.jobs || data.data || []);
-    return [];
-  },
-  getEngineers: async () => {
-    // Your actual API call here
-    // const response = await fetch(`${API_URL}/api/engineers`);
-    // const data = await response.json();
-    // return Array.isArray(data) ? data : (data.engineers || []);
-    return [];
-  },
-};
-
-// ─── Thunks ──────────────────────────────────────────────────────────────────
-
-// Engineer-wise report (grouped)
+// ─── Engineer-wise Report ──────────────────────────────────────────────────
 export const fetchEngineerWiseReport = createAsyncThunk(
   'reports/engineerWise',
-  async ({ fromDate, toDate }) => {
-    const [rawJobs, engineers] = await Promise.all([
-      api.getJobs({ fromDate, toDate }),
-      api.getEngineers(),
-    ]);
-    const jobs = rawJobs.map(normaliseJob);
-
-    const report = engineers.map(eng => ({
-      engineer: eng.name,
-      jobs: jobs.filter(j => j.engineerId === eng.name),
-    }));
-    const noEngineerJobs = jobs.filter(
-      j => !j.engineerId || j.engineerId === '-' || j.engineerId === 'No Engineer'
-    );
-    return { engineerReport: report, noEngineerJobs };
+  async ({ fromDate, toDate, status } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      if (status && status !== 'All Status') filters.status = status;
+      
+      console.log('[EngineerReport] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[EngineerReport] Jobs count:', jobs.length);
+      
+      const engineers = await api.getEngineers();
+      console.log('[EngineerReport] Engineers count:', engineers.length);
+      
+      // Group jobs by engineer
+      const report = engineers.map(eng => ({
+        engineer: eng.name,
+        jobs: jobs.filter(j => j.engineerId === eng.name || j.engineer === eng.name),
+      }));
+      
+      const noEngineerJobs = jobs.filter(j => 
+        !j.engineerId || j.engineerId === '-' || j.engineerId === '' || !j.engineer
+      );
+      
+      console.log('[EngineerReport] Report sections:', report.length);
+      console.log('[EngineerReport] Unassigned jobs:', noEngineerJobs.length);
+      
+      return { engineerReport: report, noEngineerJobs };
+    } catch (error) {
+      console.error('[EngineerReport] Error:', error);
+      return { engineerReport: [], noEngineerJobs: [] };
+    }
   }
 );
 
-// Value report (service + spare totals per job)
+// ─── Value Report ──────────────────────────────────────────────────────────
 export const fetchValueReport = createAsyncThunk(
   'reports/value',
-  async ({ fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate });
-    return rawJobs.map(job => {
-      const j = normaliseJob(job);
-      return {
-        jobNo:     j.jobNo,
-        name:      j.customerName,
-        received:  j.savedDate,
-        repaired:  j.repairedDate,
-        delivered: j.deliveredDate,
-        service:   j.serviceCharges,
-        spare:     j.spareCharges,
-        total:     j.serviceCharges + j.spareCharges,
-      };
-    });
+  async ({ fromDate, toDate, engineerId } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      if (engineerId) filters.engineerId = engineerId;
+      
+      console.log('[ValueReport] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[ValueReport] Jobs count:', jobs.length);
+      
+      return jobs.map(job => {
+        const serviceCharges = job.serviceCharges || job.service?.serviceCharge || 0;
+        const spareCharges = job.spareCharges || job.service?.spareCharge || 0;
+        
+        return {
+          jobNo: job.jobNo || job.jobSheetNo || '-',
+          name: job.customerName || job.customer?.name || '-',
+          received: job.savedDate ? formatDate(job.savedDate) : (job.createdAt ? formatDate(job.createdAt) : '-'),
+          repaired: job.repairedDate ? formatDate(job.repairedDate) : (job.service?.repairDate ? formatDate(job.service.repairDate) : '-'),
+          delivered: job.deliveredDate ? formatDate(job.deliveredDate) : (job.service?.deliveryDate ? formatDate(job.service.deliveryDate) : '-'),
+          service: serviceCharges,
+          spare: spareCharges,
+          total: serviceCharges + spareCharges,
+        };
+      });
+    } catch (error) {
+      console.error('[ValueReport] Error:', error);
+      return [];
+    }
   }
 );
 
-// Spare parts report
+// ─── Spare Parts Report ────────────────────────────────────────────────────
 export const fetchSpareReport = createAsyncThunk(
   'reports/spare',
-  async ({ engineerId, fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate, engineerId });
-    const spareItems = [];
-    rawJobs.forEach(job => {
-      const j = normaliseJob(job);
-      if (j.spareItems && j.spareItems.length) {
-        j.spareItems.forEach(item => {
-          const qty    = safeNum(item.qty);
-          const rate   = safeNum(item.rate);
-          spareItems.push({
-            jobSheet: j.jobNo,
-            spare:    safeStr(item.name ?? item.spareName ?? item.part),
-            qty,
-            rate,
-            amount:   qty * rate,
+  async ({ engineerId, fromDate, toDate } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      if (engineerId) filters.engineerId = engineerId;
+      
+      console.log('[SpareReport] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[SpareReport] Jobs count:', jobs.length);
+      
+      const spareItems = [];
+      
+      jobs.forEach(job => {
+        const spareItemsList = job.spareItems || [];
+        
+        if (spareItemsList && spareItemsList.length) {
+          spareItemsList.forEach(item => {
+            const qty = safeNum(item.qty || item.quantity);
+            const rate = safeNum(item.rate || item.price);
+            const amount = safeNum(item.amount) || (qty * rate);
+            
+            spareItems.push({
+              jobSheet: job.jobNo || job.jobSheetNo || '-',
+              spare: safeStr(item.name || item.spareName || item.partName || 'Unknown'),
+              qty: qty,
+              rate: rate,
+              amount: amount,
+            });
           });
-        });
-      }
-    });
-    return spareItems;
+        }
+      });
+      
+      console.log('[SpareReport] Spare items count:', spareItems.length);
+      return spareItems;
+    } catch (error) {
+      console.error('[SpareReport] Error:', error);
+      return [];
+    }
   }
 );
 
-// Dealer report
+// ─── Dealer Report ─────────────────────────────────────────────────────────
 export const fetchDealerReport = createAsyncThunk(
   'reports/dealer',
-  async ({ dealerName, fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate });
-    const jobs = rawJobs.map(normaliseJob);
-    if (dealerName) {
-      return jobs.filter(j =>
-        j.dealerName.toLowerCase().includes(dealerName.toLowerCase())
-      );
+  async ({ dealerName, fromDate, toDate } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      
+      console.log('[DealerReport] Fetching jobs with filters:', filters);
+      let jobs = await api.getJobs(filters);
+      console.log('[DealerReport] Jobs count:', jobs.length);
+      
+      if (dealerName) {
+        jobs = jobs.filter(job => 
+          (job.dealerName || job.dealer || '').toLowerCase().includes(dealerName.toLowerCase())
+        );
+        console.log('[DealerReport] Filtered jobs count:', jobs.length);
+      }
+      
+      return jobs;
+    } catch (error) {
+      console.error('[DealerReport] Error:', error);
+      return [];
     }
-    return jobs;
   }
 );
 
-// Daily summary (received / delivered / repaired)
+// ─── Daily Summary Report ──────────────────────────────────────────────────
 export const fetchDailySummary = createAsyncThunk(
   'reports/dailySummary',
-  async ({ type, fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate });
-    const jobs    = rawJobs.map(normaliseJob);
-    const grouped = {};
+  async ({ type, fromDate, toDate } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      
+      console.log('[DailySummary] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[DailySummary] Jobs count:', jobs.length);
+      
+      const grouped = {};
 
-    jobs.forEach(j => {
-      let dateKey;
-      if      (type === 'received')  dateKey = j.savedDate;
-      else if (type === 'delivered') dateKey = j.deliveredDate;
-      else if (type === 'repaired')  dateKey = j.repairedDate;
+      jobs.forEach(job => {
+        let dateKey = null;
+        
+        if (type === 'received') {
+          dateKey = job.savedDate ? formatDate(job.savedDate) : (job.createdAt ? formatDate(job.createdAt) : null);
+        } else if (type === 'delivered') {
+          dateKey = job.deliveredDate ? formatDate(job.deliveredDate) : (job.service?.deliveryDate ? formatDate(job.service.deliveryDate) : null);
+        } else if (type === 'repaired') {
+          dateKey = job.repairedDate ? formatDate(job.repairedDate) : (job.service?.repairDate ? formatDate(job.service.repairDate) : null);
+        }
 
-      if (!dateKey || dateKey === '-') return;
-      grouped[dateKey] = (grouped[dateKey] || 0) + 1;
-    });
+        if (dateKey && dateKey !== '-') {
+          grouped[dateKey] = (grouped[dateKey] || 0) + 1;
+        }
+      });
 
-    const summary = Object.entries(grouped).map(([date, count]) => ({ date, count }));
-    // Sort by actual date value
-    summary.sort((a, b) => {
-      const parse = (s) => {
-        const [d, m, y] = s.split('/');
-        return new Date(y, m - 1, d);
-      };
-      return parse(a.date) - parse(b.date);
-    });
-    return summary;
+      const summary = Object.entries(grouped).map(([date, count]) => ({ date, count }));
+      
+      // Sort by actual date value
+      summary.sort((a, b) => {
+        const parseDate = (s) => {
+          if (!s || s === '-') return new Date(0);
+          const parts = s.split('/');
+          if (parts.length === 3) {
+            return new Date(parts[2], parts[1] - 1, parts[0]);
+          }
+          return new Date(s);
+        };
+        return parseDate(a.date) - parseDate(b.date);
+      });
+      
+      console.log('[DailySummary] Summary count:', summary.length);
+      return summary;
+    } catch (error) {
+      console.error('[DailySummary] Error:', error);
+      return [];
+    }
   }
 );
 
-// Pending reports
+// ─── Pending Reports ───────────────────────────────────────────────────────
 export const fetchPendingReport = createAsyncThunk(
   'reports/pending',
-  async ({ type, fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate });
-    const jobs    = rawJobs.map(normaliseJob);
-
-    if (type === 'repairPending') {
-      return jobs.filter(j =>
-        j.status?.toLowerCase() === 'received' ||
-        j.status?.toLowerCase() === 'pending'
-      );
+  async ({ type, fromDate, toDate } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      
+      console.log('[PendingReport] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[PendingReport] Jobs count:', jobs.length);
+      
+      let filteredJobs = [];
+      
+      if (type === 'repairPending') {
+        filteredJobs = jobs.filter(job => {
+          const status = (job.status || job.jobStatus || '').toLowerCase();
+          return status === 'received' || status === 'pending';
+        });
+      } else if (type === 'deliveryPending') {
+        filteredJobs = jobs.filter(job => {
+          const status = (job.status || job.jobStatus || '').toLowerCase();
+          const deliveredDate = job.deliveredDate || job.service?.deliveryDate;
+          return status === 'repaired' || (status === 'pending' && (!deliveredDate || deliveredDate === '-'));
+        });
+      }
+      
+      console.log('[PendingReport] Filtered jobs count:', filteredJobs.length);
+      return filteredJobs;
+    } catch (error) {
+      console.error('[PendingReport] Error:', error);
+      return [];
     }
-    if (type === 'deliveryPending') {
-      return jobs.filter(j =>
-        j.status?.toLowerCase() === 'repaired' ||
-        (j.status?.toLowerCase() === 'pending' && (!j.deliveredDate || j.deliveredDate === '-'))
-      );
-    }
-    return [];
   }
 );
 
-// Delivered NR/NA report
+// ─── Delivered NR/NA Report ────────────────────────────────────────────────
 export const fetchDeliveredNRNAReport = createAsyncThunk(
   'reports/deliveredNRNA',
-  async ({ fromDate, toDate }) => {
-    const rawJobs = await api.getJobs({ fromDate, toDate });
-    const jobs    = rawJobs.map(normaliseJob);
-    return jobs.filter(j =>
-      j.status?.toLowerCase() === 'delivered' &&
-      j.physicalConditions?.toUpperCase?.()?.includes('NR/NA')
-    );
+  async ({ fromDate, toDate } = {}) => {
+    try {
+      const filters = {};
+      if (fromDate) filters.fromDate = fromDate;
+      if (toDate) filters.toDate = toDate;
+      
+      console.log('[NRNAReport] Fetching jobs with filters:', filters);
+      const jobs = await api.getJobs(filters);
+      console.log('[NRNAReport] Jobs count:', jobs.length);
+      
+      const filteredJobs = jobs.filter(job => {
+        const status = (job.status || job.jobStatus || '').toLowerCase();
+        const physicalConditions = job.physicalConditions || job.physicalCondition || [];
+        
+        // Check if physical conditions contain NR/NA
+        let hasNRNA = false;
+        if (Array.isArray(physicalConditions)) {
+          hasNRNA = physicalConditions.some(cond => 
+            cond?.toUpperCase()?.includes('NR') || cond?.toUpperCase()?.includes('NA')
+          );
+        } else if (typeof physicalConditions === 'string') {
+          hasNRNA = physicalConditions.toUpperCase().includes('NR') || physicalConditions.toUpperCase().includes('NA');
+        }
+        
+        return status === 'delivered' && hasNRNA;
+      });
+      
+      console.log('[NRNAReport] Filtered jobs count:', filteredJobs.length);
+      return filteredJobs;
+    } catch (error) {
+      console.error('[NRNAReport] Error:', error);
+      return [];
+    }
   }
 );
 
@@ -281,80 +328,88 @@ const reportSlice = createSlice({
   initialState: {
     engineerReport: [],
     noEngineerJobs: [],
-    valueReport:    [],
-    spareReport:    [],
-    dealerReport:   [],
-    dailySummary:   [],
-    pendingReport:  [],
-    deliveredNRNA:  [],
-    loading:        false,
-    error:          null,
+    valueReport: [],
+    spareReport: [],
+    dealerReport: [],
+    dailySummary: [],
+    pendingReport: [],
+    deliveredNRNA: [],
+    loading: false,
+    error: null,
   },
   reducers: {
     clearReports: (state) => {
       state.engineerReport = [];
       state.noEngineerJobs = [];
-      state.valueReport    = [];
-      state.spareReport    = [];
-      state.dealerReport   = [];
-      state.dailySummary   = [];
-      state.pendingReport  = [];
-      state.deliveredNRNA  = [];
-      state.error          = null;
+      state.valueReport = [];
+      state.spareReport = [];
+      state.dealerReport = [];
+      state.dailySummary = [];
+      state.pendingReport = [];
+      state.deliveredNRNA = [];
+      state.loading = false;
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
-    const pending   = (state)         => { state.loading = true;  state.error = null; };
-    const rejected  = (state, action) => { state.loading = false; state.error = action.error?.message ?? 'Error'; };
+    const pendingState = (state) => {
+      state.loading = true;
+      state.error = null;
+    };
+    
+    const rejectedState = (state, action) => {
+      state.loading = false;
+      state.error = action.error?.message || 'An error occurred';
+    };
 
     builder
-      .addCase(fetchEngineerWiseReport.pending,    pending)
-      .addCase(fetchEngineerWiseReport.rejected,   rejected)
-      .addCase(fetchEngineerWiseReport.fulfilled,  (state, { payload }) => {
-        state.loading       = false;
+      .addCase(fetchEngineerWiseReport.pending, pendingState)
+      .addCase(fetchEngineerWiseReport.rejected, rejectedState)
+      .addCase(fetchEngineerWiseReport.fulfilled, (state, { payload }) => {
+        state.loading = false;
         state.engineerReport = payload.engineerReport;
         state.noEngineerJobs = payload.noEngineerJobs;
       })
 
-      .addCase(fetchValueReport.pending,   pending)
-      .addCase(fetchValueReport.rejected,  rejected)
+      .addCase(fetchValueReport.pending, pendingState)
+      .addCase(fetchValueReport.rejected, rejectedState)
       .addCase(fetchValueReport.fulfilled, (state, { payload }) => {
-        state.loading     = false;
+        state.loading = false;
         state.valueReport = payload;
       })
 
-      .addCase(fetchSpareReport.pending,   pending)
-      .addCase(fetchSpareReport.rejected,  rejected)
+      .addCase(fetchSpareReport.pending, pendingState)
+      .addCase(fetchSpareReport.rejected, rejectedState)
       .addCase(fetchSpareReport.fulfilled, (state, { payload }) => {
-        state.loading     = false;
+        state.loading = false;
         state.spareReport = payload;
       })
 
-      .addCase(fetchDealerReport.pending,   pending)
-      .addCase(fetchDealerReport.rejected,  rejected)
+      .addCase(fetchDealerReport.pending, pendingState)
+      .addCase(fetchDealerReport.rejected, rejectedState)
       .addCase(fetchDealerReport.fulfilled, (state, { payload }) => {
-        state.loading      = false;
+        state.loading = false;
         state.dealerReport = payload;
       })
 
-      .addCase(fetchDailySummary.pending,   pending)
-      .addCase(fetchDailySummary.rejected,  rejected)
+      .addCase(fetchDailySummary.pending, pendingState)
+      .addCase(fetchDailySummary.rejected, rejectedState)
       .addCase(fetchDailySummary.fulfilled, (state, { payload }) => {
-        state.loading      = false;
+        state.loading = false;
         state.dailySummary = payload;
       })
 
-      .addCase(fetchPendingReport.pending,   pending)
-      .addCase(fetchPendingReport.rejected,  rejected)
+      .addCase(fetchPendingReport.pending, pendingState)
+      .addCase(fetchPendingReport.rejected, rejectedState)
       .addCase(fetchPendingReport.fulfilled, (state, { payload }) => {
-        state.loading       = false;
+        state.loading = false;
         state.pendingReport = payload;
       })
 
-      .addCase(fetchDeliveredNRNAReport.pending,   pending)
-      .addCase(fetchDeliveredNRNAReport.rejected,  rejected)
+      .addCase(fetchDeliveredNRNAReport.pending, pendingState)
+      .addCase(fetchDeliveredNRNAReport.rejected, rejectedState)
       .addCase(fetchDeliveredNRNAReport.fulfilled, (state, { payload }) => {
-        state.loading       = false;
+        state.loading = false;
         state.deliveredNRNA = payload;
       });
   },
