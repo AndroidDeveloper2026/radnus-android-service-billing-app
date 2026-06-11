@@ -1,6 +1,4 @@
-// // src/screens/reports/ReportsScreen.js (Complete Fixed Version)
-
-// import React, { useState, useCallback, useMemo, useEffect } from 'react';
+// import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 // import {
 //   View,
 //   Text,
@@ -13,6 +11,9 @@
 //   Alert,
 //   RefreshControl,
 //   Dimensions,
+//   LayoutAnimation,
+//   Platform,
+//   UIManager,
 // } from 'react-native';
 // import { useDispatch, useSelector } from 'react-redux';
 // import { useNavigation } from '@react-navigation/native';
@@ -59,7 +60,12 @@
 // import { fetchStaleJobs } from '../../store/slices/staleJobsSlice';
 // import { COLORS, SPACING, SHADOWS, BORDERS } from '../../utils/theme';
 
-// const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// // Enable LayoutAnimation for iOS
+// if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+//   UIManager.setLayoutAnimationEnabledExperimental(true);
+// }
 
 // // Helper Functions
 // const formatDate = (value) => {
@@ -147,17 +153,69 @@
 //   </View>
 // ));
 
-// // Table Components
-// const TableHeaders = React.memo(({ columns }) => (
-//   <View style={[styles.tableRow, styles.headerRow]}>
-//     {columns.map((column, index) => (
-//       <Text key={index} style={[styles.tableHeaderCell, column.style]}>
-//         {column.label}
-//       </Text>
-//     ))}
-//   </View>
-// ));
+// // Horizontal Scrollable Table Component - FIXED: For horizontal scrolling
+// const HorizontalScrollTable = React.memo(({ columns, data, onPress, grandTotal }) => {
+//   const renderItem = useCallback(({ item, index }) => (
+//     <TableRow 
+//       item={item} 
+//       index={index} 
+//       columns={columns}
+//       onPress={onPress}
+//     />
+//   ), [columns, onPress]);
 
+//   const keyExtractor = useCallback((item, index) => item._id || String(index), []);
+
+//   const ListFooterComponent = useCallback(() => {
+//     if (grandTotal !== undefined && grandTotal > 0 && data.length > 0) {
+//       return (
+//         <View style={styles.grandTotalRow}>
+//           <Text style={styles.grandTotalLabel}>Grand Total</Text>
+//           <Text style={styles.grandTotalValue}>₹{grandTotal.toLocaleString()}</Text>
+//         </View>
+//       );
+//     }
+//     return null;
+//   }, [grandTotal, data.length]);
+
+//   return (
+//     <View style={styles.horizontalScrollContainer}>
+//       <ScrollView 
+//         horizontal 
+//         showsHorizontalScrollIndicator={true}
+//         style={styles.horizontalScrollView}
+//       >
+//         <View>
+//           {/* Header */}
+//           <View style={[styles.tableRow, styles.headerRow]}>
+//             {columns.map((column, index) => (
+//               <Text key={index} style={[styles.tableHeaderCell, column.style, { width: column.width, minWidth: column.width }]}>
+//                 {column.label}
+//               </Text>
+//             ))}
+//           </View>
+          
+//           {/* Data Rows */}
+//           <FlatList
+//             data={data}
+//             renderItem={renderItem}
+//             keyExtractor={keyExtractor}
+//             showsVerticalScrollIndicator={true}
+//             style={styles.tableDataList}
+//             ListEmptyComponent={<EmptyState />}
+//             ListFooterComponent={ListFooterComponent}
+//             initialNumToRender={10}
+//             maxToRenderPerBatch={10}
+//             windowSize={5}
+//             nestedScrollEnabled={true}
+//           />
+//         </View>
+//       </ScrollView>
+//     </View>
+//   );
+// });
+
+// // Table Row Component
 // const TableRow = React.memo(({ item, index, columns, onPress }) => (
 //   <TouchableOpacity onPress={() => onPress && onPress(item._id)} activeOpacity={0.7} disabled={!onPress}>
 //     <View style={[styles.tableRow, index % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
@@ -173,24 +231,15 @@
 //         return (
 //           <Text 
 //             key={colIndex} 
-//             style={[styles.tableCell, column.style, column.bold && styles.boldCell]} 
+//             style={[styles.tableCell, column.style, column.bold && styles.boldCell, { width: column.width, minWidth: column.width }]} 
 //             numberOfLines={column.numberOfLines || 2}
 //           >
-//             {value || '-'}
+//             {value !== undefined && value !== null ? value : '-'}
 //           </Text>
 //         );
 //       })}
 //     </View>
 //   </TouchableOpacity>
-// ));
-
-// // Summary Card Component
-// const SummaryCard = React.memo(({ card }) => (
-//   <View style={[styles.summaryCard, { backgroundColor: card.bg }]}>
-//     {card.icon}
-//     <Text style={styles.summaryLabel}>{card.label}</Text>
-//     <Text style={[styles.summaryValue, { color: card.color }]}>{card.value}</Text>
-//   </View>
 // ));
 
 // // Stale Job Item Component
@@ -260,6 +309,11 @@
 //     });
 //   }, [navigation]);
 
+//   const toggleCollapse = useCallback(() => {
+//     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+//     setCollapsed(!collapsed);
+//   }, [collapsed]);
+
 //   if (error) {
 //     return (
 //       <View style={styles.staleWidgetContainer}>
@@ -288,7 +342,7 @@
 
 //   return (
 //     <View style={styles.staleWidgetContainer}>
-//       <TouchableOpacity onPress={() => setCollapsed(!collapsed)} activeOpacity={0.7} style={styles.staleHeader}>
+//       <TouchableOpacity onPress={toggleCollapse} activeOpacity={0.7} style={styles.staleHeader}>
 //         <View style={styles.staleHeaderLeft}>
 //           <View style={styles.staleIconContainer}>
 //             <AlertCircle size={17} color="#fbbf24" />
@@ -335,20 +389,38 @@
 //               <Text style={styles.staleLoadingText}>Loading stale jobs...</Text>
 //             </View>
 //           ) : (
-//             jobs.map(job => (
-//               <StaleJobItem 
-//                 key={job._id} 
-//                 job={job} 
-//                 maxDays={maxDays} 
-//                 onPress={navigateToJobDetail}
-//               />
-//             ))
+//             <FlatList
+//               data={jobs}
+//               keyExtractor={(item) => item._id}
+//               renderItem={({ item }) => (
+//                 <StaleJobItem 
+//                   job={item} 
+//                   maxDays={maxDays} 
+//                   onPress={navigateToJobDetail}
+//                 />
+//               )}
+//               showsVerticalScrollIndicator={true}
+//               style={styles.staleJobsList}
+//               contentContainerStyle={styles.staleJobsContent}
+//               initialNumToRender={5}
+//               maxToRenderPerBatch={5}
+//               nestedScrollEnabled={true}
+//             />
 //           )}
 //         </View>
 //       )}
 //     </View>
 //   );
 // });
+
+// // Summary Card Component
+// const SummaryCard = React.memo(({ card }) => (
+//   <View style={[styles.summaryCard, { backgroundColor: card.bg }]}>
+//     {card.icon}
+//     <Text style={styles.summaryLabel}>{card.label}</Text>
+//     <Text style={[styles.summaryValue, { color: card.color }]}>{card.value}</Text>
+//   </View>
+// ));
 
 // // Summary Cards Component
 // const SummaryCards = React.memo(({ stats }) => {
@@ -364,10 +436,13 @@
 //   ], [stats]);
 
 //   return (
-//     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.summaryScroll}>
-//       <View style={styles.summaryContainer}>
-//         {cards.map((card, i) => <SummaryCard key={i} card={card} />)}
-//       </View>
+//     <ScrollView 
+//       horizontal 
+//       showsHorizontalScrollIndicator={false} 
+//       style={styles.summaryScroll}
+//       contentContainerStyle={styles.summaryContainer}
+//     >
+//       {cards.map((card, i) => <SummaryCard key={i} card={card} />)}
 //     </ScrollView>
 //   );
 // });
@@ -389,13 +464,12 @@
 //     deliveredNRNA,
 //     loading: reportLoading,
 //   } = useSelector(state => state.reports);
-//   const { engineers, dealers } = useSelector(state => state.admin);
 //   const { list, loading: jobsLoading } = useSelector(state => state.jobs);
 
 //   const loading = reportLoading || jobsLoading;
 
 //   // State
-//   const [activeTab, setActiveTab] = useState('dailyReceived');
+//   const [activeTab, setActiveTab] = useState('all');
 //   const [filters, setFilters] = useState({
 //     fromDate: '',
 //     toDate: '',
@@ -414,14 +488,14 @@
 //   const countStats = useMemo(() => {
 //     const allJobs = list || [];
 //     return {
-//       received: allJobs.filter(j => j.device?.mobileStatus === 'Received').length,
-//       pending: allJobs.filter(j => j.device?.mobileStatus === 'Pending').length,
-//       repaired: allJobs.filter(j => j.device?.mobileStatus === 'Repaired').length,
-//       delivered: allJobs.filter(j => j.device?.mobileStatus === 'Delivered').length,
-//       nrna: allJobs.filter(j => j.device?.mobileStatus === 'Delivered NR/NA').length,
-//       serviceCharge: allJobs.reduce((s, j) => s + safeNum(j.serviceCharges ?? j.service), 0),
-//       spareCharge: allJobs.reduce((s, j) => s + safeNum(j.spareCharges ?? j.spare), 0),
-//       totalAmount: allJobs.reduce((s, j) => s + safeNum(j.totalAmount ?? 0), 0),
+//       received: allJobs.filter(j => (j.device?.mobileStatus || j.status) === 'Received').length,
+//       pending: allJobs.filter(j => (j.device?.mobileStatus || j.status) === 'Pending').length,
+//       repaired: allJobs.filter(j => (j.device?.mobileStatus || j.status) === 'Repaired').length,
+//       delivered: allJobs.filter(j => (j.device?.mobileStatus || j.status) === 'Delivered').length,
+//       nrna: allJobs.filter(j => (j.device?.mobileStatus || j.status) === 'Delivered NR/NA').length,
+//       serviceCharge: allJobs.reduce((s, j) => s + safeNum(j.serviceCharges ?? j.service?.serviceCharge ?? 0), 0),
+//       spareCharge: allJobs.reduce((s, j) => s + safeNum(j.spareCharges ?? j.service?.spareCharge ?? 0), 0),
+//       totalAmount: allJobs.reduce((s, j) => s + safeNum(j.totalAmount ?? (safeNum(j.serviceCharges) + safeNum(j.spareCharges))), 0),
 //     };
 //   }, [list]);
 
@@ -449,76 +523,89 @@
 //     );
 //   }, [pendingReport, filters.search]);
 
-//   // Column Configurations with proper widths
-//   const allReportsColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo },
-//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, render: (item) => item.customer?.name },
-//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, render: (item) => item.customer?.contact },
-//     { label: 'Device', key: 'device', style: styles.cellDevice, render: (item) => `${item.device?.make || ''} ${item.device?.model || ''}`.trim() },
-//     { label: 'Status', key: 'status', style: styles.cellStatus, render: (item) => <StatusChip status={item.device?.mobileStatus} /> },
-//     { label: 'Date', key: 'createdAt', style: styles.cellDate, render: (item) => formatDate(item.createdAt) },
-//   ], []);
+//   // Calculate totals
+//   const valueReportTotal = useMemo(() => {
+//     return (valueReport || []).reduce((sum, item) => sum + safeNum(item.total), 0);
+//   }, [valueReport]);
 
-//   const engineerColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo },
-//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, render: (item) => item.customer?.name },
-//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, render: (item) => item.customer?.contact },
-//     { label: 'Status', key: 'status', style: styles.cellStatus, render: (item) => <StatusChip status={item.device?.mobileStatus} /> },
-//     { label: 'Date', key: 'createdAt', style: styles.cellDate, render: (item) => formatDate(item.createdAt) },
+//   const spareReportTotal = useMemo(() => {
+//     return (spareReport || []).reduce((sum, item) => sum + safeNum(item.amount), 0);
+//   }, [spareReport]);
+
+//   const dailyReportTotal = useMemo(() => {
+//     return (dailySummary || []).reduce((sum, item) => sum + safeNum(item.count), 0);
+//   }, [dailySummary]);
+
+//   // Column Configurations - Updated widths for better horizontal scrolling
+//   const allReportsColumns = useMemo(() => [
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
+//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, width: 180, render: (item) => item.customer?.name },
+//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, width: 130, render: (item) => item.customer?.contact },
+//     { label: 'Device', key: 'device', style: styles.cellDevice, width: 200, render: (item) => `${item.device?.make || ''} ${item.device?.model || ''}`.trim() },
+//     { label: 'Status', key: 'status', style: styles.cellStatus, width: 120, render: (item) => <StatusChip status={item.device?.mobileStatus || item.status} /> },
+//     { label: 'Date', key: 'createdAt', style: styles.cellDate, width: 120, render: (item) => formatDate(item.createdAt) },
 //   ], []);
 
 //   const valueColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobNo', style: styles.cellJobNoSmall },
-//     { label: 'Customer', key: 'name', style: styles.cellCustomerValue },
-//     { label: 'Service', key: 'service', style: styles.cellAmount, render: (item) => `₹${item.service || 0}` },
-//     { label: 'Spare', key: 'spare', style: styles.cellAmount, render: (item) => `₹${item.spare || 0}` },
-//     { label: 'Total', key: 'total', style: [styles.cellAmount, styles.boldCell], render: (item) => `₹${item.total || 0}`, bold: true },
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobNo', style: styles.cellJobNoSmall, width: 100 },
+//     { label: 'Customer', key: 'name', style: styles.cellCustomerValue, width: 180 },
+//     { label: 'Service', key: 'service', style: styles.cellAmount, width: 120, render: (item) => `₹${safeNum(item.service).toLocaleString()}` },
+//     { label: 'Spare', key: 'spare', style: styles.cellAmount, width: 120, render: (item) => `₹${safeNum(item.spare).toLocaleString()}` },
+//     { label: 'Total', key: 'total', style: [styles.cellAmount, styles.boldCell], width: 130, render: (item) => `₹${safeNum(item.total).toLocaleString()}`, bold: true },
 //   ], []);
 
 //   const spareColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheet', style: styles.cellJobNoSmall },
-//     { label: 'Spare Part', key: 'spare', style: styles.cellSpareName },
-//     { label: 'Qty', key: 'qty', style: styles.cellSmallNumber },
-//     { label: 'Rate', key: 'rate', style: styles.cellAmount, render: (item) => `₹${item.rate || 0}` },
-//     { label: 'Amount', key: 'amount', style: [styles.cellAmount, styles.boldCell], render: (item) => `₹${item.amount || 0}`, bold: true },
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheet', style: styles.cellJobNoSmall, width: 100 },
+//     { label: 'Spare Part', key: 'spare', style: styles.cellSpareName, width: 220 },
+//     { label: 'Qty', key: 'qty', style: styles.cellSmallNumber, width: 80, render: (item) => safeNum(item.qty) },
+//     { label: 'Rate', key: 'rate', style: styles.cellAmount, width: 120, render: (item) => `₹${safeNum(item.rate).toLocaleString()}` },
+//     { label: 'Amount', key: 'amount', style: [styles.cellAmount, styles.boldCell], width: 130, render: (item) => `₹${safeNum(item.amount).toLocaleString()}`, bold: true },
 //   ], []);
 
 //   const dailyColumns = useMemo(() => [
-//     { label: 'Date', key: 'date', style: styles.cellDateLarge },
-//     { label: 'Count', key: 'count', style: styles.cellCountLarge },
+//     { label: 'Date', key: 'date', style: styles.cellDateLarge, width: 150 },
+//     { label: 'Count', key: 'count', style: styles.cellCountLarge, width: 120, render: (item) => safeNum(item.count) },
 //   ], []);
 
 //   const pendingColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo },
-//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, render: (item) => item.customer?.name },
-//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, render: (item) => item.customer?.contact },
-//     { label: 'Device', key: 'device', style: styles.cellDevice, render: (item) => `${item.device?.make || ''} ${item.device?.model || ''}`.trim() },
-//     { label: 'Date', key: 'createdAt', style: styles.cellDate, render: (item) => formatDate(item.createdAt) },
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
+//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, width: 180, render: (item) => item.customer?.name },
+//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, width: 130, render: (item) => item.customer?.contact },
+//     { label: 'Device', key: 'device', style: styles.cellDevice, width: 200, render: (item) => `${item.device?.make || ''} ${item.device?.model || ''}`.trim() },
+//     { label: 'Date', key: 'createdAt', style: styles.cellDate, width: 120, render: (item) => formatDate(item.createdAt) },
 //   ], []);
 
 //   const dealerColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo },
-//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, render: (item) => item.customer?.name },
-//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, render: (item) => item.customer?.contact },
-//     { label: 'Dealer', key: 'dealerName', style: styles.cellDealerName, render: (item) => item.dealerName || item.dealer },
-//     { label: 'Status', key: 'status', style: styles.cellStatus, render: (item) => <StatusChip status={item.device?.mobileStatus} /> },
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
+//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, width: 180, render: (item) => item.customer?.name },
+//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, width: 130, render: (item) => item.customer?.contact },
+//     { label: 'Dealer', key: 'dealerName', style: styles.cellDealerName, width: 150, render: (item) => item.dealerName || item.dealer },
+//     { label: 'Status', key: 'status', style: styles.cellStatus, width: 120, render: (item) => <StatusChip status={item.device?.mobileStatus || item.status} /> },
 //   ], []);
 
 //   const nrnaColumns = useMemo(() => [
-//     { label: '#', key: 'index', style: styles.cellSl },
-//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo },
-//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, render: (item) => item.customer?.name },
-//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, render: (item) => item.customer?.contact },
-//     { label: 'Delivered Date', key: 'deliveredDate', style: styles.cellDate, render: (item) => formatDate(item.deliveredDate) },
-//     { label: 'Physical Cond.', key: 'physicalCond', style: styles.cellPhysCond, render: (item) => 
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
+//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, width: 180, render: (item) => item.customer?.name },
+//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, width: 130, render: (item) => item.customer?.contact },
+//     { label: 'Delivered Date', key: 'deliveredDate', style: styles.cellDate, width: 130, render: (item) => formatDate(item.deliveredDate) },
+//     { label: 'Physical Cond.', key: 'physicalCond', style: styles.cellPhysCond, width: 200, render: (item) => 
 //       Array.isArray(item.physicalConditions) ? item.physicalConditions.join(', ') : item.physicalCondition || '-' 
 //     },
+//   ], []);
+
+//   const engineerColumns = useMemo(() => [
+//     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
+//     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
+//     { label: 'Customer', key: 'customerName', style: styles.cellCustomer, width: 180, render: (item) => item.customer?.name },
+//     { label: 'Contact', key: 'customerContact', style: styles.cellContact, width: 130, render: (item) => item.customer?.contact },
+//     { label: 'Status', key: 'status', style: styles.cellStatus, width: 120, render: (item) => <StatusChip status={item.device?.mobileStatus || item.status} /> },
+//     { label: 'Date', key: 'createdAt', style: styles.cellDate, width: 120, render: (item) => formatDate(item.createdAt) },
 //   ], []);
 
 //   // Callbacks
@@ -572,6 +659,7 @@
 //   }, [loadReport, activeTab, filters]);
 
 //   const toggleSection = useCallback((sectionId) => {
+//     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 //     setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
 //   }, []);
 
@@ -679,29 +767,16 @@
 //   }, [activeTab, filteredList, valueReport, spareReport, dealerReport, pendingReport, engineerReport, noEngineerJobs, dailySummary, deliveredNRNA, filteredPending]);
 
 //   useEffect(() => {
-//     loadReport('dailyReceived', '', '', 'All Status', '', '');
+//     loadReport('all', '', '', 'All Status', '', '');
 //   }, []);
 
 //   // Render Functions
 //   const renderAllReports = useCallback(() => (
-//     <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//       <View style={styles.tableContainer}>
-//         <TableHeaders columns={allReportsColumns} />
-//         <FlatList
-//           data={filteredList}
-//           keyExtractor={(item, idx) => item._id || String(idx)}
-//           renderItem={({ item, index }) => (
-//             <TableRow 
-//               item={item} 
-//               index={index} 
-//               columns={allReportsColumns}
-//               onPress={navigateToJobDetail}
-//             />
-//           )}
-//           scrollEnabled={false}
-//         />
-//       </View>
-//     </ScrollView>
+//     <HorizontalScrollTable 
+//       columns={allReportsColumns} 
+//       data={filteredList} 
+//       onPress={navigateToJobDetail}
+//     />
 //   ), [filteredList, allReportsColumns, navigateToJobDetail]);
 
 //   const renderEngineerReport = useCallback(() => {
@@ -722,166 +797,76 @@
 //           {expandedSections[`engineer_${idx}`] ? <ChevronUp size={14} color={COLORS.gray600} /> : <ChevronDown size={14} color={COLORS.gray600} />}
 //         </TouchableOpacity>
 //         {(expandedSections[`engineer_${idx}`] === undefined || expandedSections[`engineer_${idx}`]) && (
-//           <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//             <View style={styles.tableContainer}>
-//               <TableHeaders columns={engineerColumns} />
-//               <FlatList
-//                 data={section.data}
-//                 keyExtractor={(item, i) => item._id || String(i)}
-//                 renderItem={({ item, index }) => (
-//                   <TableRow 
-//                     item={item} 
-//                     index={index} 
-//                     columns={engineerColumns}
-//                     onPress={navigateToJobDetail}
-//                   />
-//                 )}
-//                 scrollEnabled={false}
-//               />
-//             </View>
-//           </ScrollView>
+//           <HorizontalScrollTable 
+//             columns={engineerColumns} 
+//             data={section.data} 
+//             onPress={navigateToJobDetail}
+//           />
 //         )}
 //       </View>
 //     ));
 //   }, [engineerReport, noEngineerJobs, expandedSections, toggleSection, engineerColumns, navigateToJobDetail]);
 
-//   const renderValueReport = useCallback(() => {
-//     const total = (valueReport || []).reduce((s, i) => s + safeNum(i.total), 0);
-    
-//     return (
-//       <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//         <View style={styles.tableContainer}>
-//           <TableHeaders columns={valueColumns} />
-//           <FlatList
-//             data={valueReport || []}
-//             keyExtractor={(_, idx) => String(idx)}
-//             renderItem={({ item, index }) => (
-//               <TableRow item={item} index={index} columns={valueColumns} onPress={null} />
-//             )}
-//             ListFooterComponent={
-//               (valueReport || []).length > 0 ? (
-//                 <View style={styles.grandTotalRow}>
-//                   <Text style={styles.grandTotalLabel}>Grand Total</Text>
-//                   <Text style={styles.grandTotalValue}>₹{total.toLocaleString()}</Text>
-//                 </View>
-//               ) : null
-//             }
-//             scrollEnabled={false}
-//           />
-//         </View>
-//       </ScrollView>
-//     );
-//   }, [valueReport, valueColumns]);
+//   const renderValueReport = useCallback(() => (
+//     <HorizontalScrollTable 
+//       columns={valueColumns} 
+//       data={valueReport || []} 
+//       grandTotal={valueReportTotal}
+//     />
+//   ), [valueReport, valueColumns, valueReportTotal]);
 
-//   const renderSpareReport = useCallback(() => {
-//     const total = (spareReport || []).reduce((s, i) => s + safeNum(i.amount), 0);
-    
-//     return (
-//       <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//         <View style={styles.tableContainer}>
-//           <TableHeaders columns={spareColumns} />
-//           <FlatList
-//             data={spareReport || []}
-//             keyExtractor={(_, idx) => String(idx)}
-//             renderItem={({ item, index }) => (
-//               <TableRow item={item} index={index} columns={spareColumns} onPress={null} />
-//             )}
-//             ListFooterComponent={
-//               (spareReport || []).length > 0 ? (
-//                 <View style={styles.grandTotalRow}>
-//                   <Text style={styles.grandTotalLabel}>Grand Total</Text>
-//                   <Text style={styles.grandTotalValue}>₹{total.toLocaleString()}</Text>
-//                 </View>
-//               ) : null
-//             }
-//             scrollEnabled={false}
-//           />
-//         </View>
-//       </ScrollView>
-//     );
-//   }, [spareReport, spareColumns]);
+//   const renderSpareReport = useCallback(() => (
+//     <HorizontalScrollTable 
+//       columns={spareColumns} 
+//       data={spareReport || []} 
+//       grandTotal={spareReportTotal}
+//     />
+//   ), [spareReport, spareColumns, spareReportTotal]);
 
 //   const renderDailyReport = useCallback(() => {
-//     const total = (dailySummary || []).reduce((s, i) => s + safeNum(i.count), 0);
-    
-//     // Sort data by date
 //     const sortedData = [...(dailySummary || [])].sort((a, b) => {
-//       const dateA = new Date(a.date.split('/').reverse().join('-'));
-//       const dateB = new Date(b.date.split('/').reverse().join('-'));
-//       return dateA - dateB;
+//       const parseDate = (s) => {
+//         if (!s || s === '-') return new Date(0);
+//         const parts = s.split('/');
+//         if (parts.length === 3) {
+//           return new Date(parts[2], parts[1] - 1, parts[0]);
+//         }
+//         return new Date(s);
+//       };
+//       return parseDate(a.date) - parseDate(b.date);
 //     });
     
 //     return (
-//       <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//         <View style={styles.tableContainer}>
-//           <TableHeaders columns={dailyColumns} />
-//           <FlatList
-//             data={sortedData}
-//             keyExtractor={(_, idx) => String(idx)}
-//             renderItem={({ item, index }) => (
-//               <TableRow item={item} index={index} columns={dailyColumns} onPress={null} />
-//             )}
-//             ListFooterComponent={
-//               sortedData.length > 0 ? (
-//                 <View style={styles.grandTotalRow}>
-//                   <Text style={styles.grandTotalLabel}>Total Count</Text>
-//                   <Text style={styles.grandTotalValue}>{total}</Text>
-//                 </View>
-//               ) : null
-//             }
-//             scrollEnabled={false}
-//           />
-//         </View>
-//       </ScrollView>
+//       <HorizontalScrollTable 
+//         columns={dailyColumns} 
+//         data={sortedData} 
+//         grandTotal={dailyReportTotal}
+//       />
 //     );
-//   }, [dailySummary, dailyColumns]);
+//   }, [dailySummary, dailyColumns, dailyReportTotal]);
 
 //   const renderPendingReport = useCallback(() => (
-//     <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//       <View style={styles.tableContainer}>
-//         <TableHeaders columns={pendingColumns} />
-//         <FlatList
-//           data={filteredPending}
-//           keyExtractor={(item, idx) => item._id || String(idx)}
-//           renderItem={({ item, index }) => (
-//             <TableRow item={item} index={index} columns={pendingColumns} onPress={navigateToJobDetail} />
-//           )}
-//           scrollEnabled={false}
-//         />
-//       </View>
-//     </ScrollView>
+//     <HorizontalScrollTable 
+//       columns={pendingColumns} 
+//       data={filteredPending} 
+//       onPress={navigateToJobDetail}
+//     />
 //   ), [filteredPending, pendingColumns, navigateToJobDetail]);
 
 //   const renderDealerReport = useCallback(() => (
-//     <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//       <View style={styles.tableContainer}>
-//         <TableHeaders columns={dealerColumns} />
-//         <FlatList
-//           data={dealerReport || []}
-//           keyExtractor={(item, idx) => item._id || String(idx)}
-//           renderItem={({ item, index }) => (
-//             <TableRow item={item} index={index} columns={dealerColumns} onPress={navigateToJobDetail} />
-//           )}
-//           scrollEnabled={false}
-//         />
-//       </View>
-//     </ScrollView>
+//     <HorizontalScrollTable 
+//       columns={dealerColumns} 
+//       data={dealerReport || []} 
+//       onPress={navigateToJobDetail}
+//     />
 //   ), [dealerReport, dealerColumns, navigateToJobDetail]);
 
 //   const renderNRNAReport = useCallback(() => (
-//     <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
-//       <View style={styles.tableContainer}>
-//         <TableHeaders columns={nrnaColumns} />
-//         <FlatList
-//           data={deliveredNRNA || []}
-//           keyExtractor={(item, idx) => item._id || String(idx)}
-//           renderItem={({ item, index }) => (
-//             <TableRow item={item} index={index} columns={nrnaColumns} onPress={navigateToJobDetail} />
-//           )}
-//           scrollEnabled={false}
-//         />
-//       </View>
-//     </ScrollView>
+//     <HorizontalScrollTable 
+//       columns={nrnaColumns} 
+//       data={deliveredNRNA || []} 
+//       onPress={navigateToJobDetail}
+//     />
 //   ), [deliveredNRNA, nrnaColumns, navigateToJobDetail]);
 
 //   const renderContent = useCallback(() => {
@@ -916,123 +901,119 @@
 
 //   return (
 //     <View style={styles.container}>
-//       <FlatList
-//         data={[{ key: 'content' }]}
-//         keyExtractor={() => 'main-content'}
-//         renderItem={() => (
-//           <>
-//             <SummaryCards stats={countStats} />
-//             <StaleJobsWidget />
-            
-//             {/* Filter Section */}
-//             <View style={styles.filterSection}>
-//               <View style={styles.searchRow}>
-//                 <View style={styles.searchInputContainer}>
-//                   <Search size={16} color={COLORS.gray400} />
-//                   <TextInput
-//                     style={styles.searchInput}
-//                     placeholder="Search by name / job no / contact"
-//                     placeholderTextColor={COLORS.gray400}
-//                     value={filters.search}
-//                     onChangeText={(value) => updateFilter('search', value)}
-//                   />
-//                   {filters.search.length > 0 && (
-//                     <TouchableOpacity onPress={() => updateFilter('search', '')} style={styles.searchClear}>
-//                       <X size={14} color={COLORS.gray400} />
-//                     </TouchableOpacity>
-//                   )}
-//                 </View>
-//                 <TouchableOpacity
-//                   style={[styles.filterToggle, activeFilterCount > 0 && styles.filterToggleActive]}
-//                   onPress={() => setShowFilters(!showFilters)}
-//                 >
-//                   <Filter size={18} color={activeFilterCount > 0 ? COLORS.white : COLORS.primary} />
-//                   {activeFilterCount > 0 && (
-//                     <View style={styles.filterBadge}>
-//                       <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-//                     </View>
-//                   )}
-//                 </TouchableOpacity>
-//               </View>
-
-//               {showFilters && (
-//                 <View style={styles.filtersGrid}>
-//                   <View style={styles.filterItem}>
-//                     <Text style={styles.filterLabel}>Status</Text>
-//                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-//                       {STATUS_OPTIONS.map(status => (
-//                         <TouchableOpacity
-//                           key={status}
-//                           style={[styles.chip, filters.status === status && styles.chipActive]}
-//                           onPress={() => updateFilter('status', status)}
-//                         >
-//                           <Text style={[styles.chipText, filters.status === status && styles.chipTextActive]}>{status}</Text>
-//                         </TouchableOpacity>
-//                       ))}
-//                     </ScrollView>
-//                   </View>
-
-//                   <View style={styles.dateRangeContainer}>
-//                     <TouchableOpacity
-//                       style={[styles.dateButton, filters.fromDate && styles.dateButtonActive]}
-//                       onPress={() => setShowFromPicker(true)}
-//                     >
-//                       <Calendar size={15} color={filters.fromDate ? COLORS.primary : COLORS.gray500} />
-//                       <Text style={[styles.dateText, filters.fromDate && styles.dateTextActive]}>
-//                         {filters.fromDate || 'From Date'}
-//                       </Text>
-//                     </TouchableOpacity>
-//                     <Text style={styles.dateSeparator}>→</Text>
-//                     <TouchableOpacity
-//                       style={[styles.dateButton, filters.toDate && styles.dateButtonActive]}
-//                       onPress={() => setShowToPicker(true)}
-//                     >
-//                       <Calendar size={15} color={filters.toDate ? COLORS.primary : COLORS.gray500} />
-//                       <Text style={[styles.dateText, filters.toDate && styles.dateTextActive]}>
-//                         {filters.toDate || 'To Date'}
-//                       </Text>
-//                     </TouchableOpacity>
-//                   </View>
-
-//                   <View style={styles.actionButtons}>
-//                     <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilter}>
-//                       <Text style={styles.applyButtonText}>Apply Filter</Text>
-//                     </TouchableOpacity>
-//                     <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
-//                       <X size={15} color={COLORS.gray600} />
-//                       <Text style={styles.resetButtonText}>Reset</Text>
-//                     </TouchableOpacity>
-//                   </View>
-//                 </View>
-//               )}
-
-//               <View style={styles.exportButtons}>
-//                 <TouchableOpacity style={styles.excelButton} onPress={handleExportToExcel}>
-//                   <Download size={16} color={COLORS.success} />
-//                   <Text style={styles.excelButtonText}>Export to Excel</Text>
-//                 </TouchableOpacity>
-//               </View>
-//             </View>
-
-//             {/* Tabs */}
-//             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabsContent}>
-//               {REPORT_TABS.map(tab => (
-//                 <TabButton key={tab.id} tab={tab} isActive={activeTab === tab.id} onPress={handleTabPress} />
-//               ))}
-//             </ScrollView>
-
-//             {/* Report Content */}
-//             <View style={styles.reportContainer}>
-//               {renderContent()}
-//             </View>
-//           </>
-//         )}
+//       <ScrollView
+//         style={styles.mainScrollView}
+//         showsVerticalScrollIndicator={true}
 //         refreshControl={
 //           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[COLORS.primary]} />
 //         }
-//         showsVerticalScrollIndicator={true}
-//         contentContainerStyle={styles.flatListContent}
-//       />
+//         nestedScrollEnabled={true}
+//       >
+//         <SummaryCards stats={countStats} />
+//         <StaleJobsWidget />
+        
+//         {/* Filter Section */}
+//         <View style={styles.filterSection}>
+//           <View style={styles.searchRow}>
+//             <View style={styles.searchInputContainer}>
+//               <Search size={16} color={COLORS.gray400} />
+//               <TextInput
+//                 style={styles.searchInput}
+//                 placeholder="Search by name / job no / contact"
+//                 placeholderTextColor={COLORS.gray400}
+//                 value={filters.search}
+//                 onChangeText={(value) => updateFilter('search', value)}
+//               />
+//               {filters.search.length > 0 && (
+//                 <TouchableOpacity onPress={() => updateFilter('search', '')} style={styles.searchClear}>
+//                   <X size={14} color={COLORS.gray400} />
+//                 </TouchableOpacity>
+//               )}
+//             </View>
+//             <TouchableOpacity
+//               style={[styles.filterToggle, activeFilterCount > 0 && styles.filterToggleActive]}
+//               onPress={() => setShowFilters(!showFilters)}
+//             >
+//               <Filter size={18} color={activeFilterCount > 0 ? COLORS.white : COLORS.primary} />
+//               {activeFilterCount > 0 && (
+//                 <View style={styles.filterBadge}>
+//                   <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+//                 </View>
+//               )}
+//             </TouchableOpacity>
+//           </View>
+
+//           {showFilters && (
+//             <View style={styles.filtersGrid}>
+//               <View style={styles.filterItem}>
+//                 <Text style={styles.filterLabel}>Status</Text>
+//                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+//                   {STATUS_OPTIONS.map(status => (
+//                     <TouchableOpacity
+//                       key={status}
+//                       style={[styles.chip, filters.status === status && styles.chipActive]}
+//                       onPress={() => updateFilter('status', status)}
+//                     >
+//                       <Text style={[styles.chipText, filters.status === status && styles.chipTextActive]}>{status}</Text>
+//                     </TouchableOpacity>
+//                   ))}
+//                 </ScrollView>
+//               </View>
+
+//               <View style={styles.dateRangeContainer}>
+//                 <TouchableOpacity
+//                   style={[styles.dateButton, filters.fromDate && styles.dateButtonActive]}
+//                   onPress={() => setShowFromPicker(true)}
+//                 >
+//                   <Calendar size={15} color={filters.fromDate ? COLORS.primary : COLORS.gray500} />
+//                   <Text style={[styles.dateText, filters.fromDate && styles.dateTextActive]}>
+//                     {filters.fromDate || 'From Date'}
+//                   </Text>
+//                 </TouchableOpacity>
+//                 <Text style={styles.dateSeparator}>→</Text>
+//                 <TouchableOpacity
+//                   style={[styles.dateButton, filters.toDate && styles.dateButtonActive]}
+//                   onPress={() => setShowToPicker(true)}
+//                 >
+//                   <Calendar size={15} color={filters.toDate ? COLORS.primary : COLORS.gray500} />
+//                   <Text style={[styles.dateText, filters.toDate && styles.dateTextActive]}>
+//                     {filters.toDate || 'To Date'}
+//                   </Text>
+//                 </TouchableOpacity>
+//               </View>
+
+//               <View style={styles.actionButtons}>
+//                 <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilter}>
+//                   <Text style={styles.applyButtonText}>Apply Filter</Text>
+//                 </TouchableOpacity>
+//                 <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+//                   <X size={15} color={COLORS.gray600} />
+//                   <Text style={styles.resetButtonText}>Reset</Text>
+//                 </TouchableOpacity>
+//               </View>
+//             </View>
+//           )}
+
+//           <View style={styles.exportButtons}>
+//             <TouchableOpacity style={styles.excelButton} onPress={handleExportToExcel}>
+//               <Download size={16} color={COLORS.success} />
+//               <Text style={styles.excelButtonText}>Export to Excel</Text>
+//             </TouchableOpacity>
+//           </View>
+//         </View>
+
+//         {/* Tabs */}
+//         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabsContent}>
+//           {REPORT_TABS.map(tab => (
+//             <TabButton key={tab.id} tab={tab} isActive={activeTab === tab.id} onPress={handleTabPress} />
+//           ))}
+//         </ScrollView>
+
+//         {/* Report Content */}
+//         <View style={styles.reportContainer}>
+//           {renderContent()}
+//         </View>
+//       </ScrollView>
 
 //       {/* Date Pickers */}
 //       <DatePicker
@@ -1064,11 +1045,23 @@
 // // Styles
 // const styles = StyleSheet.create({
 //   container: { flex: 1, backgroundColor: COLORS.gray50 },
-//   flatListContent: { paddingBottom: 40 },
+//   mainScrollView: { flex: 1 },
+  
+//   // Horizontal Scroll Table Styles
+//   horizontalScrollContainer: {
+//     flex: 1,
+//     minHeight: 400,
+//   },
+//   horizontalScrollView: {
+//     flex: 1,
+//   },
+//   tableDataList: {
+//     maxHeight: SCREEN_HEIGHT - 500,
+//   },
   
 //   // Summary Cards
 //   summaryScroll: { flexGrow: 0 },
-//   summaryContainer: { flexDirection: 'row', padding: SPACING.md, gap: SPACING.sm, flexWrap: 'wrap' },
+//   summaryContainer: { flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm },
 //   summaryCard: { 
 //     minWidth: 90, 
 //     backgroundColor: COLORS.white, 
@@ -1119,7 +1112,9 @@
 //   staleDropdownItemActive: { backgroundColor: '#fef3c7' },
 //   staleDropdownText: { fontSize: 12, color: '#64748b' },
 //   staleDropdownTextActive: { color: '#78350f', fontWeight: '600' },
-//   staleBody: { padding: 12, maxHeight: 400 },
+//   staleBody: { paddingHorizontal: 12, paddingTop: 12, maxHeight: 400 },
+//   staleJobsList: { maxHeight: 350 },
+//   staleJobsContent: { paddingBottom: 8 },
 //   staleLoadingContainer: { alignItems: 'center', paddingVertical: 24, gap: 8 },
 //   staleLoadingText: { color: '#334155', fontSize: 12 },
 //   staleErrorContainer: { alignItems: 'center', paddingVertical: 24, gap: 8 },
@@ -1169,7 +1164,7 @@
 //   },
   
 //   // Filter Section
-//   filterSection: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.md, margin: SPACING.md, marginTop: 0, ...SHADOWS.small },
+//   filterSection: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.md, marginHorizontal: SPACING.md, marginBottom: SPACING.md, ...SHADOWS.small },
 //   searchRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
 //   searchInputContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.gray200, borderRadius: BORDERS.radius.md, paddingHorizontal: SPACING.sm, backgroundColor: COLORS.gray50 },
 //   searchInput: { flex: 1, paddingVertical: SPACING.sm, fontSize: 13, color: COLORS.gray900 },
@@ -1212,8 +1207,6 @@
 //   reportContainer: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, overflow: 'hidden', ...SHADOWS.small, minHeight: 200 },
   
 //   // Table Styles
-//   tableScrollView: { flexGrow: 1 },
-//   tableContainer: { minWidth: SCREEN_WIDTH - 32, paddingBottom: 10 },
 //   headerRow: {
 //     backgroundColor: COLORS.primary,
 //     borderBottomWidth: 2,
@@ -1234,24 +1227,23 @@
 //   tableCell: { paddingHorizontal: 6, fontSize: 11, color: COLORS.gray800, flexWrap: 'wrap' },
 //   boldCell: { fontWeight: '700', color: COLORS.gray900 },
   
-//   // Cell Widths - Increased for better readability
-//   cellSl: { width: 50, minWidth: 50, textAlign: 'center' },
-//   cellJobNo: { width: 100, minWidth: 100 },
-//   cellJobNoSmall: { width: 85, minWidth: 85 },
-//   cellCustomer: { width: 150, minWidth: 150 },
-//   cellCustomerValue: { width: 170, minWidth: 170 },
-//   cellContact: { width: 120, minWidth: 120 },
-//   cellDevice: { width: 140, minWidth: 140 },
-//   cellStatus: { width: 105, minWidth: 105 },
-//   cellDate: { width: 110, minWidth: 110 },
-//   cellDateLarge: { width: 130, minWidth: 130 },
-//   cellCount: { width: 80, minWidth: 80, textAlign: 'center' },
-//   cellCountLarge: { width: 100, minWidth: 100, textAlign: 'center' },
-//   cellAmount: { width: 100, minWidth: 100, textAlign: 'right' },
-//   cellSmallNumber: { width: 65, minWidth: 65, textAlign: 'center' },
-//   cellSpareName: { width: 200, minWidth: 200 },
-//   cellDealerName: { width: 130, minWidth: 130 },
-//   cellPhysCond: { width: 160, minWidth: 160 },
+//   // Cell Widths
+//   cellSl: { textAlign: 'center' },
+//   cellJobNo: {},
+//   cellJobNoSmall: {},
+//   cellCustomer: {},
+//   cellCustomerValue: {},
+//   cellContact: {},
+//   cellDevice: {},
+//   cellStatus: {},
+//   cellDate: {},
+//   cellDateLarge: {},
+//   cellCountLarge: { textAlign: 'center' },
+//   cellAmount: { textAlign: 'right' },
+//   cellSmallNumber: { textAlign: 'center' },
+//   cellSpareName: {},
+//   cellDealerName: {},
+//   cellPhysCond: {},
   
 //   // Status Chip
 //   statusChip: { paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: BORDERS.radius.sm, alignSelf: 'flex-start' },
@@ -1277,7 +1269,7 @@
 //   loaderText: { color: COLORS.gray500, fontSize: 13 },
 // });
 
-//==============================
+//======================================================
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
@@ -1434,68 +1426,6 @@ const EmptyState = React.memo(() => (
   </View>
 ));
 
-// Horizontal Scrollable Table Component - FIXED: For horizontal scrolling
-const HorizontalScrollTable = React.memo(({ columns, data, onPress, grandTotal }) => {
-  const renderItem = useCallback(({ item, index }) => (
-    <TableRow 
-      item={item} 
-      index={index} 
-      columns={columns}
-      onPress={onPress}
-    />
-  ), [columns, onPress]);
-
-  const keyExtractor = useCallback((item, index) => item._id || String(index), []);
-
-  const ListFooterComponent = useCallback(() => {
-    if (grandTotal !== undefined && grandTotal > 0 && data.length > 0) {
-      return (
-        <View style={styles.grandTotalRow}>
-          <Text style={styles.grandTotalLabel}>Grand Total</Text>
-          <Text style={styles.grandTotalValue}>₹{grandTotal.toLocaleString()}</Text>
-        </View>
-      );
-    }
-    return null;
-  }, [grandTotal, data.length]);
-
-  return (
-    <View style={styles.horizontalScrollContainer}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={true}
-        style={styles.horizontalScrollView}
-      >
-        <View>
-          {/* Header */}
-          <View style={[styles.tableRow, styles.headerRow]}>
-            {columns.map((column, index) => (
-              <Text key={index} style={[styles.tableHeaderCell, column.style, { width: column.width, minWidth: column.width }]}>
-                {column.label}
-              </Text>
-            ))}
-          </View>
-          
-          {/* Data Rows */}
-          <FlatList
-            data={data}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            showsVerticalScrollIndicator={true}
-            style={styles.tableDataList}
-            ListEmptyComponent={<EmptyState />}
-            ListFooterComponent={ListFooterComponent}
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            windowSize={5}
-            nestedScrollEnabled={true}
-          />
-        </View>
-      </ScrollView>
-    </View>
-  );
-});
-
 // Table Row Component
 const TableRow = React.memo(({ item, index, columns, onPress }) => (
   <TouchableOpacity onPress={() => onPress && onPress(item._id)} activeOpacity={0.7} disabled={!onPress}>
@@ -1522,6 +1452,78 @@ const TableRow = React.memo(({ item, index, columns, onPress }) => (
     </View>
   </TouchableOpacity>
 ));
+
+// Horizontal Scroll Table - Using FlatList for both directions
+const HorizontalScrollTable = React.memo(({ columns, data, onPress, grandTotal }) => {
+  const renderItem = useCallback(({ item, index }) => (
+    <TableRow 
+      key={item._id || index}
+      item={item} 
+      index={index} 
+      columns={columns}
+      onPress={onPress}
+    />
+  ), [columns, onPress]);
+
+  const keyExtractor = useCallback((item, index) => item._id || String(index), []);
+
+  const ListHeaderComponent = useCallback(() => (
+    <View style={[styles.tableRow, styles.headerRow]}>
+      {columns.map((column, index) => (
+        <Text 
+          key={index} 
+          style={[styles.tableHeaderCell, column.style, { width: column.width, minWidth: column.width }]}
+          numberOfLines={2}
+        >
+          {column.label}
+        </Text>
+      ))}
+    </View>
+  ), [columns]);
+
+  const ListFooterComponent = useCallback(() => {
+    if (grandTotal !== undefined && grandTotal > 0 && data.length > 0) {
+      return (
+        <View style={styles.grandTotalRow}>
+          <Text style={styles.grandTotalLabel}>Grand Total</Text>
+          <Text style={styles.grandTotalValue}>₹{grandTotal.toLocaleString()}</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [grandTotal, data.length]);
+
+  const totalWidth = columns.reduce((sum, col) => sum + (col.width || 120), 0);
+
+  return (
+    <View style={styles.horizontalScrollContainer}>
+      <FlatList
+        horizontal
+        data={[{ key: 'table' }]}
+        keyExtractor={() => 'horizontal-table'}
+        showsHorizontalScrollIndicator={true}
+        renderItem={() => (
+          <View style={{ width: totalWidth }}>
+            <FlatList
+              data={data}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              ListHeaderComponent={ListHeaderComponent}
+              ListFooterComponent={ListFooterComponent}
+              showsVerticalScrollIndicator={true}
+              style={styles.tableDataList}
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              nestedScrollEnabled={true}
+              removeClippedSubviews={true}
+            />
+          </View>
+        )}
+      />
+    </View>
+  );
+});
 
 // Stale Job Item Component
 const StaleJobItem = React.memo(({ job, maxDays, onPress }) => {
@@ -1648,17 +1650,19 @@ const StaleJobsWidget = React.memo(() => {
 
       {showDaysDropdown && (
         <View style={styles.staleDropdownContainer}>
-          {[1, 3, 5, 7, 10, 15].map(day => (
-            <TouchableOpacity
-              key={day}
-              style={[styles.staleDropdownItem, days === day && styles.staleDropdownItemActive]}
-              onPress={() => { setDays(day); setShowDaysDropdown(false); }}
-            >
-              <Text style={[styles.staleDropdownText, days === day && styles.staleDropdownTextActive]}>
-                {day}+ day{day > 1 ? 's' : ''}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {[1, 3, 5, 7, 10, 15].map(day => (
+              <TouchableOpacity
+                key={day}
+                style={[styles.staleDropdownItem, days === day && styles.staleDropdownItemActive]}
+                onPress={() => { setDays(day); setShowDaysDropdown(false); }}
+              >
+                <Text style={[styles.staleDropdownText, days === day && styles.staleDropdownTextActive]}>
+                  {day}+ day{day > 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -1670,23 +1674,20 @@ const StaleJobsWidget = React.memo(() => {
               <Text style={styles.staleLoadingText}>Loading stale jobs...</Text>
             </View>
           ) : (
-            <FlatList
-              data={jobs}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
+            <ScrollView 
+              style={styles.staleJobsList}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
+              {jobs.map((job) => (
                 <StaleJobItem 
-                  job={item} 
+                  key={job._id}
+                  job={job} 
                   maxDays={maxDays} 
                   onPress={navigateToJobDetail}
                 />
-              )}
-              showsVerticalScrollIndicator={true}
-              style={styles.staleJobsList}
-              contentContainerStyle={styles.staleJobsContent}
-              initialNumToRender={5}
-              maxToRenderPerBatch={5}
-              nestedScrollEnabled={true}
-            />
+              ))}
+            </ScrollView>
           )}
         </View>
       )}
@@ -1817,7 +1818,7 @@ export default function ReportsScreen() {
     return (dailySummary || []).reduce((sum, item) => sum + safeNum(item.count), 0);
   }, [dailySummary]);
 
-  // Column Configurations - Updated widths for better horizontal scrolling
+  // Column Configurations
   const allReportsColumns = useMemo(() => [
     { label: '#', key: 'index', style: styles.cellSl, width: 60 },
     { label: 'Job No', key: 'jobSheetNo', style: styles.cellJobNo, width: 120 },
@@ -2052,14 +2053,6 @@ export default function ReportsScreen() {
   }, []);
 
   // Render Functions
-  const renderAllReports = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={allReportsColumns} 
-      data={filteredList} 
-      onPress={navigateToJobDetail}
-    />
-  ), [filteredList, allReportsColumns, navigateToJobDetail]);
-
   const renderEngineerReport = useCallback(() => {
     const sections = [];
     if (noEngineerJobs?.length > 0)
@@ -2088,22 +2081,6 @@ export default function ReportsScreen() {
     ));
   }, [engineerReport, noEngineerJobs, expandedSections, toggleSection, engineerColumns, navigateToJobDetail]);
 
-  const renderValueReport = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={valueColumns} 
-      data={valueReport || []} 
-      grandTotal={valueReportTotal}
-    />
-  ), [valueReport, valueColumns, valueReportTotal]);
-
-  const renderSpareReport = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={spareColumns} 
-      data={spareReport || []} 
-      grandTotal={spareReportTotal}
-    />
-  ), [spareReport, spareColumns, spareReportTotal]);
-
   const renderDailyReport = useCallback(() => {
     const sortedData = [...(dailySummary || [])].sort((a, b) => {
       const parseDate = (s) => {
@@ -2126,60 +2103,7 @@ export default function ReportsScreen() {
     );
   }, [dailySummary, dailyColumns, dailyReportTotal]);
 
-  const renderPendingReport = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={pendingColumns} 
-      data={filteredPending} 
-      onPress={navigateToJobDetail}
-    />
-  ), [filteredPending, pendingColumns, navigateToJobDetail]);
-
-  const renderDealerReport = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={dealerColumns} 
-      data={dealerReport || []} 
-      onPress={navigateToJobDetail}
-    />
-  ), [dealerReport, dealerColumns, navigateToJobDetail]);
-
-  const renderNRNAReport = useCallback(() => (
-    <HorizontalScrollTable 
-      columns={nrnaColumns} 
-      data={deliveredNRNA || []} 
-      onPress={navigateToJobDetail}
-    />
-  ), [deliveredNRNA, nrnaColumns, navigateToJobDetail]);
-
-  const renderContent = useCallback(() => {
-    if (loading && !refreshing && 
-        ((activeTab === 'all' && filteredList.length === 0) ||
-         (activeTab === 'repairPending' && filteredPending.length === 0))) {
-      return (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loaderText}>Loading report...</Text>
-        </View>
-      );
-    }
-
-    switch (activeTab) {
-      case 'all': return renderAllReports();
-      case 'engineer': return renderEngineerReport();
-      case 'value': return renderValueReport();
-      case 'spare': return renderSpareReport();
-      case 'dealer': return renderDealerReport();
-      case 'dailyReceived':
-      case 'dailyDelivered':
-      case 'dailyRepaired': return renderDailyReport();
-      case 'repairPending':
-      case 'deliveryPending': return renderPendingReport();
-      case 'deliveredNRNA': return renderNRNAReport();
-      default: return <EmptyState />;
-    }
-  }, [activeTab, loading, refreshing, filteredList.length, filteredPending.length, 
-      renderAllReports, renderEngineerReport, renderValueReport, renderSpareReport, 
-      renderDealerReport, renderDailyReport, renderPendingReport, renderNRNAReport]);
-
+  // Main render
   return (
     <View style={styles.container}>
       <ScrollView
@@ -2292,7 +2216,25 @@ export default function ReportsScreen() {
 
         {/* Report Content */}
         <View style={styles.reportContainer}>
-          {renderContent()}
+          {loading && !refreshing && 
+           ((activeTab === 'all' && filteredList.length === 0) ||
+            (activeTab === 'repairPending' && filteredPending.length === 0)) ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loaderText}>Loading report...</Text>
+            </View>
+          ) : (
+            <>
+              {activeTab === 'all' && <HorizontalScrollTable columns={allReportsColumns} data={filteredList} onPress={navigateToJobDetail} />}
+              {activeTab === 'engineer' && renderEngineerReport()}
+              {activeTab === 'value' && <HorizontalScrollTable columns={valueColumns} data={valueReport || []} grandTotal={valueReportTotal} />}
+              {activeTab === 'spare' && <HorizontalScrollTable columns={spareColumns} data={spareReport || []} grandTotal={spareReportTotal} />}
+              {activeTab === 'dealer' && <HorizontalScrollTable columns={dealerColumns} data={dealerReport || []} onPress={navigateToJobDetail} />}
+              {(activeTab === 'dailyReceived' || activeTab === 'dailyDelivered' || activeTab === 'dailyRepaired') && renderDailyReport()}
+              {(activeTab === 'repairPending' || activeTab === 'deliveryPending') && <HorizontalScrollTable columns={pendingColumns} data={filteredPending} onPress={navigateToJobDetail} />}
+              {activeTab === 'deliveredNRNA' && <HorizontalScrollTable columns={nrnaColumns} data={deliveredNRNA || []} onPress={navigateToJobDetail} />}
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -2328,19 +2270,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.gray50 },
   mainScrollView: { flex: 1 },
   
-  // Horizontal Scroll Table Styles
   horizontalScrollContainer: {
     flex: 1,
     minHeight: 400,
   },
-  horizontalScrollView: {
-    flex: 1,
-  },
   tableDataList: {
-    maxHeight: SCREEN_HEIGHT - 500,
+    maxHeight: SCREEN_HEIGHT - 450,
+    minHeight: 200,
   },
   
-  // Summary Cards
   summaryScroll: { flexGrow: 0 },
   summaryContainer: { flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm },
   summaryCard: { 
@@ -2354,7 +2292,6 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 11, color: COLORS.gray500, marginTop: 4, textAlign: 'center' },
   summaryValue: { fontSize: 16, fontWeight: '700', marginTop: 4 },
   
-  // Stale Jobs Widget
   staleWidgetContainer: {
     backgroundColor: '#fff',
     borderRadius: BORDERS.radius.lg,
@@ -2395,7 +2332,6 @@ const styles = StyleSheet.create({
   staleDropdownTextActive: { color: '#78350f', fontWeight: '600' },
   staleBody: { paddingHorizontal: 12, paddingTop: 12, maxHeight: 400 },
   staleJobsList: { maxHeight: 350 },
-  staleJobsContent: { paddingBottom: 8 },
   staleLoadingContainer: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   staleLoadingText: { color: '#334155', fontSize: 12 },
   staleErrorContainer: { alignItems: 'center', paddingVertical: 24, gap: 8 },
@@ -2444,7 +2380,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // Filter Section
   filterSection: { backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, padding: SPACING.md, marginHorizontal: SPACING.md, marginBottom: SPACING.md, ...SHADOWS.small },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
   searchInputContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.gray200, borderRadius: BORDERS.radius.md, paddingHorizontal: SPACING.sm, backgroundColor: COLORS.gray50 },
@@ -2476,7 +2411,6 @@ const styles = StyleSheet.create({
   excelButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10b98115', borderRadius: BORDERS.radius.md, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md, gap: 6 },
   excelButtonText: { fontWeight: '500', color: COLORS.success, fontSize: 12 },
   
-  // Tabs
   tabsScroll: { marginHorizontal: SPACING.md, marginBottom: SPACING.sm, flexGrow: 0 },
   tabsContent: { paddingVertical: 4, flexDirection: 'row', flexWrap: 'wrap' },
   tab: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDERS.radius.md, marginRight: SPACING.sm, marginBottom: SPACING.xs, borderWidth: 1, borderColor: COLORS.gray200, ...SHADOWS.small },
@@ -2484,10 +2418,8 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 11, fontWeight: '500', color: COLORS.gray600, marginLeft: 5 },
   activeTabText: { color: COLORS.white },
   
-  // Report Container
   reportContainer: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.white, borderRadius: BORDERS.radius.lg, overflow: 'hidden', ...SHADOWS.small, minHeight: 200 },
   
-  // Table Styles
   headerRow: {
     backgroundColor: COLORS.primary,
     borderBottomWidth: 2,
@@ -2508,7 +2440,6 @@ const styles = StyleSheet.create({
   tableCell: { paddingHorizontal: 6, fontSize: 11, color: COLORS.gray800, flexWrap: 'wrap' },
   boldCell: { fontWeight: '700', color: COLORS.gray900 },
   
-  // Cell Widths
   cellSl: { textAlign: 'center' },
   cellJobNo: {},
   cellJobNoSmall: {},
@@ -2526,26 +2457,21 @@ const styles = StyleSheet.create({
   cellDealerName: {},
   cellPhysCond: {},
   
-  // Status Chip
   statusChip: { paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: BORDERS.radius.sm, alignSelf: 'flex-start' },
   statusChipText: { fontSize: 9, fontWeight: '500' },
   
-  // Section Card
   sectionCard: { borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: SPACING.md, backgroundColor: COLORS.gray50 },
   sectionTitle: { fontWeight: '600', fontSize: 12, color: COLORS.primary, flex: 1 },
   
-  // Grand Total
   grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.md, backgroundColor: '#eff6ff', borderTopWidth: 1, borderTopColor: '#bfdbfe' },
   grandTotalLabel: { fontWeight: '600', fontSize: 13, color: COLORS.gray800 },
   grandTotalValue: { fontWeight: '700', fontSize: 14, color: COLORS.primary },
   
-  // Empty State
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: SPACING.sm },
   emptyText: { fontSize: 14, fontWeight: '600', color: COLORS.gray500 },
   emptySubText: { fontSize: 12, color: COLORS.gray400 },
   
-  // Loader
   loaderContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: SPACING.md },
   loaderText: { color: COLORS.gray500, fontSize: 13 },
 });
