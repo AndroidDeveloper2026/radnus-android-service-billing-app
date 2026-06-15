@@ -48,6 +48,7 @@ const transformJobToFrontend = (job) => {
     service: job.service || {},
     engineerId: job.service?.engineer || '',
     engineer: job.service?.engineer || '',
+    assignedTo: job.assignedTo || job.service?.engineer || '',
     dealerName: job.service?.dealer || '',
     dealer: job.service?.dealer || '',
     drawerId: job.service?.drawer || '',
@@ -67,10 +68,19 @@ const transformJobToFrontend = (job) => {
     spareItems: job.spareItems || [],
     status: job.device?.mobileStatus || 'Received',
     jobStatus: job.device?.mobileStatus || 'Received',
+    statusLogs: job.statusLogs || [],
+    repairSteps: job.repairSteps || [],
+    transferLog: job.transferLog || [],
     savedDate: job.createdAt || new Date().toISOString(),
     createdAt: job.createdAt || new Date().toISOString(),
     createdBy: job.createdBy || {},
     isInvoiced: job.isInvoiced || false,
+    isCancelled: job.isCancelled || false,
+    cancelRemarks: job.cancelRemarks || '',
+    cancelledBy: job.cancelledBy || '',
+    cancelledAt: job.cancelledAt || null,
+    rebillPending: job.rebillPending || false,
+    rebillHistory: job.rebillHistory || [],
   };
 };
 
@@ -121,7 +131,9 @@ const transformJobToBackend = (jobData, currentUser) => ({
 
 // ---------- API Functions ----------
 export const api = {
-  // Auth
+  // =============================================
+  // AUTHENTICATION
+  // =============================================
   login: async (username, password) => {
     const response = await apiClient.post('/api/login', { username, password });
     const { token, user } = response.data;
@@ -139,7 +151,14 @@ export const api = {
     return await AsyncStorage.getItem('@radnus_token');
   },
 
-  // Jobs
+  getCurrentUser: async () => {
+    const userStr = await AsyncStorage.getItem('@radnus_user');
+    return userStr ? JSON.parse(userStr) : null;
+  },
+
+  // =============================================
+  // JOBS
+  // =============================================
   getJobs: async (filters = {}) => {
     try {
       const params = new URLSearchParams();
@@ -151,13 +170,7 @@ export const api = {
       if (filters.dealerName || filters.dealer) params.append('dealer', filters.dealerName || filters.dealer);
       
       const queryString = params.toString();
-      console.log('[API] Fetching jobs with params:', queryString);
-      
       const response = await apiClient.get(`/api/jobsheets/filter${queryString ? '?' + queryString : ''}`);
-      
-      console.log('[API] Response data type:', typeof response.data);
-      console.log('[API] Is array:', Array.isArray(response.data));
-      console.log('[API] Data length:', Array.isArray(response.data) ? response.data.length : 'N/A');
       
       // Handle different response formats
       let jobs = [];
@@ -168,20 +181,13 @@ export const api = {
       } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
         jobs = response.data.data;
       } else if (response.data && typeof response.data === 'object') {
-        // Try to find any array in the response
         const arrayKey = Object.keys(response.data).find(key => Array.isArray(response.data[key]));
         if (arrayKey) {
-          console.log('[API] Found array in key:', arrayKey);
           jobs = response.data[arrayKey];
-        } else {
-          console.warn('[API] Unexpected response format, keys:', Object.keys(response.data));
         }
       }
       
-      // Transform to ensure all required fields exist
       const transformedJobs = jobs.map(transformJobToFrontend);
-      console.log('[API] Transformed jobs count:', transformedJobs.length);
-      
       return transformedJobs;
     } catch (error) {
       console.error('[API] Error fetching jobs:', error);
@@ -195,7 +201,6 @@ export const api = {
   },
 
   createJob: async (jobData) => {
-    // 1. Get the next job number from the backend
     let nextJobNo;
     try {
       const nextRes = await apiClient.get('/api/jobsheets/next-number');
@@ -205,14 +210,11 @@ export const api = {
       nextJobNo = `JS-${Date.now()}`;
     }
 
-    // 2. Merge the job number into the data
     const dataWithNo = { ...jobData, jobNo: nextJobNo };
-
     const userStr = await AsyncStorage.getItem('@radnus_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const backendData = transformJobToBackend(dataWithNo, user);
     
-    // 3. Stringify nested objects as required by the backend
     const payload = {
       ...backendData,
       customer: JSON.stringify(backendData.customer),
@@ -225,9 +227,7 @@ export const api = {
       createdBy: JSON.stringify(backendData.createdBy),
     };
     
-    // Ensure jobSheetNo is included
     payload.jobSheetNo = nextJobNo;
-    
     const response = await apiClient.post('/api/jobsheets', payload);
     return transformJobToFrontend(response.data);
   },
@@ -250,7 +250,6 @@ export const api = {
     };
     
     if (!payload.jobSheetNo) delete payload.jobSheetNo;
-    
     const response = await apiClient.put(`/api/jobsheets/${id}`, payload);
     return transformJobToFrontend(response.data);
   },
@@ -259,23 +258,258 @@ export const api = {
     throw new Error('Delete not implemented in backend');
   },
 
-  // Dashboard
-  getDashboardStats: async () => {
-    const response = await apiClient.get('/api/dashboard/stats');
-    return {
-      total: response.data.totalJobs,
-      pending: response.data.pendingJobs,
-      completed: response.data.completedJobs,
-    };
+  // =============================================
+  // ENGINEER DASHBOARD APIs
+  // =============================================
+  
+  // Update Job Status
+  updateJobStatus: async (jobId, status, updatedBy) => {
+    try {
+      const response = await apiClient.patch(`/api/jobsheets/${jobId}/status`, {
+        status,
+        updatedBy
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error updating job status:', error);
+      throw error;
+    }
   },
 
-  // Engineers
+  // Add Repair Step
+  addRepairStep: async (jobId, step, note, completedBy) => {
+    try {
+      const response = await apiClient.post(`/api/jobsheets/${jobId}/steps`, {
+        step,
+        note: note || '',
+        completedBy
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error adding repair step:', error);
+      throw error;
+    }
+  },
+
+  // Toggle Repair Step (done/undone)
+  toggleRepairStep: async (jobId, stepId, done, completedBy) => {
+    try {
+      const response = await apiClient.patch(`/api/jobsheets/${jobId}/steps/${stepId}`, {
+        done,
+        completedBy
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error toggling repair step:', error);
+      throw error;
+    }
+  },
+
+  // Delete Repair Step
+  deleteRepairStep: async (jobId, stepId) => {
+    try {
+      const response = await apiClient.delete(`/api/jobsheets/${jobId}/steps/${stepId}`);
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error deleting repair step:', error);
+      throw error;
+    }
+  },
+
+  // Transfer Job to another engineer
+  transferJob: async (jobId, from, to, note) => {
+    try {
+      const response = await apiClient.patch(`/api/jobsheets/${jobId}/transfer`, {
+        from,
+        to,
+        note: note || ''
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error transferring job:', error);
+      throw error;
+    }
+  },
+
+  // Get Workload Data
+  getWorkload: async () => {
+    try {
+      const response = await apiClient.get('/api/jobsheets/workload');
+      // Returns array of { name: "EngineerName", activeJobs: 4 }
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.error('[API] Error fetching workload:', error);
+      return [];
+    }
+  },
+
+  // =============================================
+  // INVOICE & ESTIMATE APIs
+  // =============================================
+
+  // Send Invoice Email
+  sendInvoice: async (jobId) => {
+    try {
+      const response = await apiClient.post(`/api/jobsheets/send-invoice/${jobId}`);
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error sending invoice:', error);
+      throw error;
+    }
+  },
+
+  // Send Estimate Email
+  sendEstimate: async (jobId) => {
+    try {
+      const response = await apiClient.post(`/api/jobsheets/send-estimate/${jobId}`);
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error sending estimate:', error);
+      throw error;
+    }
+  },
+
+  // Lock Invoice (mark as invoiced)
+  lockInvoice: async (jobId) => {
+    try {
+      const response = await apiClient.put(`/api/jobsheets/${jobId}/invoice`);
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error locking invoice:', error);
+      throw error;
+    }
+  },
+
+  // =============================================
+  // JOB MANAGEMENT APIs
+  // =============================================
+
+  // Cancel Job
+  cancelJob: async (jobId, cancelRemarks, cancelledBy) => {
+    try {
+      const response = await apiClient.put(`/api/jobsheets/${jobId}/cancel`, {
+        cancelRemarks,
+        cancelledBy
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error cancelling job:', error);
+      throw error;
+    }
+  },
+
+  // Rebill Job (reopen cancelled/invoiced job)
+  rebillJob: async (jobId, rebilledBy) => {
+    try {
+      const response = await apiClient.put(`/api/jobsheets/${jobId}/rebill`, {
+        rebilledBy
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error rebilling job:', error);
+      throw error;
+    }
+  },
+
+  // Update Spare Items
+  updateSpares: async (jobId, spareItems) => {
+    try {
+      const response = await apiClient.put(`/api/jobsheets/${jobId}/spares`, {
+        spareItems
+      });
+      return transformJobToFrontend(response.data);
+    } catch (error) {
+      console.error('[API] Error updating spares:', error);
+      throw error;
+    }
+  },
+
+  // =============================================
+  // CUSTOMER APIs
+  // =============================================
+
+  // Search Customers (Autocomplete)
+  searchCustomers: async (query, type = 'name') => {
+    try {
+      const response = await apiClient.get('/api/jobsheets/customers/search', {
+        params: { q: query, type }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error searching customers:', error);
+      return [];
+    }
+  },
+
+  // =============================================
+  // REPORT APIs
+  // =============================================
+
+  // Get Stale Jobs Report
+  getStaleJobs: async ({ days = 3 } = {}) => {
+    try {
+      const response = await apiClient.get('/api/jobsheets/stale', {
+        params: { days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error fetching stale jobs:', error);
+      throw error;
+    }
+  },
+
+  // Get User Report
+  getUserReport: async (searchTerm = '') => {
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('jobSheetNo', searchTerm);
+      const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error fetching user report:', error);
+      throw error;
+    }
+  },
+
+  // Get Sales Rep Report
+  getSalesRepReport: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.salesRep) queryParams.append('salesRep', params.salesRep);
+      if (params.fromDate) queryParams.append('fromDate', params.fromDate);
+      if (params.toDate) queryParams.append('toDate', params.toDate);
+      
+      const response = await apiClient.get(`/api/jobsheets/salesrep-report?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('[API] Error fetching sales rep report:', error);
+      throw error;
+    }
+  },
+
+  // =============================================
+  // DASHBOARD STATS
+  // =============================================
+  getDashboardStats: async () => {
+    try {
+      const response = await apiClient.get('/api/dashboard/stats');
+      return {
+        total: response.data.totalJobs || 0,
+        pending: response.data.pendingJobs || 0,
+        completed: response.data.completedJobs || 0,
+      };
+    } catch (error) {
+      console.error('[API] Error fetching dashboard stats:', error);
+      return { total: 0, pending: 0, completed: 0 };
+    }
+  },
+
+  // =============================================
+  // ENGINEERS MANAGEMENT
+  // =============================================
   getEngineers: async () => {
     try {
-      const response = await apiClient.get('/api/engineers');
-      console.log('[API] Engineers response:', response.data);
-      
-      // Handle different response formats
+      const response = await apiClient.get('/api/engineers'); 
       let engineers = [];
       if (Array.isArray(response.data)) {
         engineers = response.data;
@@ -305,12 +539,52 @@ export const api = {
   },
   
   deleteEngineer: async (id) => {
-    console.log('API deleteEngineer called with id:', id);
     const response = await apiClient.delete(`/api/engineers/${id}`);
     return response.data;
   },
 
-  // Makes
+  // =============================================
+  // SALES REPS MANAGEMENT
+  // =============================================
+  getSalesReps: async () => {
+    try {
+      const response = await apiClient.get('/api/salesreps');
+      let salesReps = [];
+      if (Array.isArray(response.data)) {
+        salesReps = response.data;
+      } else if (response.data && response.data.salesReps && Array.isArray(response.data.salesReps)) {
+        salesReps = response.data.salesReps;
+      }
+      
+      return salesReps.map(s => ({ 
+        id: s._id, 
+        _id: s._id, 
+        name: s.name 
+      }));
+    } catch (error) {
+      console.warn('[API] Error fetching sales reps:', error.message);
+      return [];
+    }
+  },
+
+  addSalesRep: async (name) => {
+    const response = await apiClient.post('/api/salesreps', { name });
+    return { id: response.data._id, _id: response.data._id, name: response.data.name };
+  },
+
+  updateSalesRep: async (id, name) => {
+    const response = await apiClient.put(`/api/salesreps/${id}`, { name });
+    return { id: response.data._id, _id: response.data._id, name: response.data.name };
+  },
+
+  deleteSalesRep: async (id) => {
+    const response = await apiClient.delete(`/api/salesreps/${id}`);
+    return response.data;
+  },
+
+  // =============================================
+  // MAKES MANAGEMENT
+  // =============================================
   getMakes: async () => {
     const response = await apiClient.get('/api/makes');
     return response.data.map(m => ({ id: m._id, _id: m._id, name: m.name }));
@@ -322,12 +596,13 @@ export const api = {
   },
   
   deleteMake: async (id) => {
-    console.log('API deleteMake called with id:', id);
     const response = await apiClient.delete(`/api/makes/${id}`);
     return response.data;
   },
 
-  // Models
+  // =============================================
+  // MODELS MANAGEMENT
+  // =============================================
   getModels: async () => {
     const makes = await api.getMakes();
     let allModels = [];
@@ -357,12 +632,13 @@ export const api = {
   },
   
   deleteModel: async (id) => {
-    console.log('API deleteModel called with id:', id);
     const response = await apiClient.delete(`/api/models/${id}`);
     return response.data;
   },
 
-  // Faults
+  // =============================================
+  // FAULTS MANAGEMENT
+  // =============================================
   getFaults: async () => {
     const response = await apiClient.get('/api/faults');
     return response.data.map(f => ({ id: f._id, _id: f._id, name: f.name }));
@@ -374,12 +650,13 @@ export const api = {
   },
   
   deleteFault: async (id) => {
-    console.log('API deleteFault called with id:', id);
     const response = await apiClient.delete(`/api/faults/${id}`);
     return response.data;
   },
 
-  // Drawers
+  // =============================================
+  // DRAWERS MANAGEMENT
+  // =============================================
   getDrawers: async () => {
     const response = await apiClient.get('/api/drawers');
     return response.data.map(d => ({ id: d._id, _id: d._id, name: d.name }));
@@ -391,41 +668,16 @@ export const api = {
   },
   
   deleteDrawer: async (id) => {
-    console.log('API deleteDrawer called with id:', id);
     const response = await apiClient.delete(`/api/drawers/${id}`);
     return response.data;
   },
 
-  // Users
-  getUsers: async () => {
-    const response = await apiClient.get('/api/users');
-    return response.data;
-  },
-  
-  addUser: async (userData) => {
-    const response = await apiClient.post('/api/users', userData);
-    return response.data;
-  },
-  
-  deleteUser: async (id) => {
-    const response = await apiClient.delete(`/api/users/${id}`);
-    return response.data;
-  },
-
-  // User Report
-  getUserReport: async (searchTerm = '') => {
-    const params = new URLSearchParams();
-    if (searchTerm) params.append('jobSheetNo', searchTerm);
-    const response = await apiClient.get(`/api/jobsheets/user-report?${params.toString()}`);
-    return response.data;
-  },
-
-  // Dealers
+  // =============================================
+  // DEALERS MANAGEMENT
+  // =============================================
   getDealers: async () => {
     try {
       const response = await apiClient.get('/api/dealers');
-      console.log('[API] Dealers response:', response.data);
-      
       let dealers = [];
       if (Array.isArray(response.data)) {
         dealers = response.data;
@@ -444,18 +696,22 @@ export const api = {
     }
   },
 
-  // Stale Jobs - NEW METHOD ADDED HERE
-  getStaleJobs: async ({ days = 3 } = {}) => {
-    try {
-      const response = await apiClient.get('/api/jobsheets/stale', {
-        params: { days }
-      });
-      console.log('[API] Stale jobs response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('[API] Error fetching stale jobs:', error);
-      throw error;
-    }
+  // =============================================
+  // USERS MANAGEMENT
+  // =============================================
+  getUsers: async () => {
+    const response = await apiClient.get('/api/users');
+    return response.data;
+  },
+  
+  addUser: async (userData) => {
+    const response = await apiClient.post('/api/users', userData);
+    return response.data;
+  },
+  
+  deleteUser: async (id) => {
+    const response = await apiClient.delete(`/api/users/${id}`);
+    return response.data;
   },
 };
 

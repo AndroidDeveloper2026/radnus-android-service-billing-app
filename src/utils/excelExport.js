@@ -3,10 +3,7 @@ import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
 import { Platform, Alert } from 'react-native';
 
-/**
- * Download data as Excel file - NO PERMISSION REQUIRED
- * Saves to app cache and shares immediately
- */
+
 export const downloadAsExcel = async (data, filename) => {
   if (!data || data.length === 0) {
     Alert.alert('No Data', 'There is no data to download');
@@ -64,7 +61,6 @@ export const downloadAsExcel = async (data, filename) => {
     const cachePath = `${RNFS.CachesDirectoryPath}/${fullFilename}`;
     await RNFS.writeFile(cachePath, excelBuffer, 'base64');
     
-    console.log('File saved to cache:', cachePath);
     
     // Show success message with share option
     Alert.alert(
@@ -87,11 +83,10 @@ export const downloadAsExcel = async (data, filename) => {
                 try {
                   await RNFS.unlink(cachePath);
                 } catch (e) {
-                  console.log('Cleanup error:', e);
+                  // console.log('Cleanup error:', e);
                 }
               }, 30000);
             } catch (shareError) {
-              console.log('Share error:', shareError);
               Alert.alert('Info', 'You can find the file in app cache');
             }
           }
@@ -126,9 +121,7 @@ export const downloadAsExcel = async (data, filename) => {
   }
 };
 
-/**
- * Prepare data for different report types
- */
+
 export const prepareExportData = (reportType, data, extractJobFields = null) => {
   if (!data || data.length === 0) return [];
 

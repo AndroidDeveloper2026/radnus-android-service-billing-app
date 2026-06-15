@@ -5,6 +5,7 @@ import adminReducer from './slices/adminSlice';
 import reportReducer from './slices/reportSlice';
 import userReducer from './slices/userSlice';
 import staleJobsReducer from './slices/staleJobsSlice';
+import engineerReducer from './slices/engineerSlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,5 +14,6 @@ export const store = configureStore({
     reports: reportReducer,
     users: userReducer,
     staleJobs: staleJobsReducer,
+    engineer: engineerReducer,
   },
 });
