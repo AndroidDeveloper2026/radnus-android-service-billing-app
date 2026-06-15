@@ -278,7 +278,7 @@
 
 //------------------------------------------
 
-// src/components/UI.js
+
 import React, { useState } from 'react';
 import {
   View,
