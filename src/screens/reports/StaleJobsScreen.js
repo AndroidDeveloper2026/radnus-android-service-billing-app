@@ -143,7 +143,8 @@ const StaleJobsScreen = () => {
           <TouchableOpacity 
             style={styles.daysSelector}
             onPress={() => {
-              const newDays = days === 3 ? 7 : days === 7 ? 14 : 3;
+              // const newDays = days === 3 ? 7 : days === 7 ? 14 : 3;
+              const newDays = days === 1 ? 3 : days === 3 ? 5 : days === 5 ? 7 : 1;
               setDays(newDays);
             }}
           >
