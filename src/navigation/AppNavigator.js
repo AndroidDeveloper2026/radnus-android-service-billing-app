@@ -1,4 +1,4 @@
-// // src/navigation/AppNavigator.js
+// // src/navigation/AppNavigator.js (Updated)
 // import React from 'react';
 // import { NavigationContainer } from '@react-navigation/native';
 // import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,7 @@
 // import JobSheetFormScreen from '../screens/jobsheet/JobSheetFormScreen';
 // import JobDetailScreen from '../screens/jobsheet/JobDetailScreen';
 // import ReportsScreen from '../screens/reports/ReportsScreen';
+// import StaleJobsScreen from '../screens/reports/StaleJobsScreen'; // Import new screen
 // import AdminScreens from '../screens/admin/AdminScreens';
 
 // const Tab = createBottomTabNavigator();
@@ -49,6 +50,27 @@
 //         name="AdminMain"
 //         component={AdminScreens}
 //         options={{ headerTitle: 'Masters', headerShown: true }}
+//       />
+//     </Stack.Navigator>
+//   );
+// }
+
+// function ReportsStack() {
+//   return (
+//     <Stack.Navigator>
+//       <Stack.Screen
+//         name="ReportsMain"
+//         component={ReportsScreen}
+//         options={{ headerTitle: 'Reports', headerShown: true }}
+//       />
+//       <Stack.Screen
+//         name="StaleJobs"
+//         component={StaleJobsScreen}
+//         options={{ 
+//           // headerTitle: 'Stale Jobs',
+//           headerShown: false,
+//           // headerBackTitle: 'Back',
+//         }}
 //       />
 //     </Stack.Navigator>
 //   );
@@ -143,8 +165,8 @@
 //             />
 //             <Tab.Screen
 //               name="Reports"
-//               component={ReportsScreen}
-//               options={{ title: 'Reports', headerTitle: 'Reports' }}
+//               component={ReportsStack}
+//               options={{ title: 'Reports', headerShown: false }}
 //             />
 //             <Tab.Screen
 //               name="Data"
@@ -170,9 +192,9 @@
 //   );
 // }
 
-//================================================
+//++++++++++++++++++++++++++++++++++++++++++++
 
-// src/navigation/AppNavigator.js (Updated)
+// src/navigation/AppNavigator.js
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -189,7 +211,8 @@ import SearchJobSheetScreen from '../screens/jobsheet/SearchJobSheetScreen';
 import JobSheetFormScreen from '../screens/jobsheet/JobSheetFormScreen';
 import JobDetailScreen from '../screens/jobsheet/JobDetailScreen';
 import ReportsScreen from '../screens/reports/ReportsScreen';
-import StaleJobsScreen from '../screens/reports/StaleJobsScreen'; // Import new screen
+import StaleJobsScreen from '../screens/reports/StaleJobsScreen';
+import RebillReportScreen from '../screens/reports/RebillReportScreen';
 import AdminScreens from '../screens/admin/AdminScreens';
 
 const Tab = createBottomTabNavigator();
@@ -240,11 +263,12 @@ function ReportsStack() {
       <Stack.Screen
         name="StaleJobs"
         component={StaleJobsScreen}
-        options={{ 
-          // headerTitle: 'Stale Jobs',
-          headerShown: false,
-          // headerBackTitle: 'Back',
-        }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="RebillReport"
+        component={RebillReportScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
