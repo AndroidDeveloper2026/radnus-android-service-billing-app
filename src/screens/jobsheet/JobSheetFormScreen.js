@@ -46,6 +46,7 @@
 //   fetchMakes,
 //   fetchModels,
 //   fetchDrawers,
+//   fetchSalesReps
 // } from '../../store/slices/adminSlice';
 // import {
 //   Button,
@@ -135,6 +136,18 @@
 //   { id: 'Delivered', name: 'Delivered' },
 // ];
 
+// const instaFollowOptions = [
+//   { id: 'Yes', name: 'Yes' },
+//   { id: 'No', name: 'No' },
+//   { id: 'Already Done', name: 'Already Done' },
+// ];
+
+// const googleReviewOptions = [
+//   { id: 'Yes', name: 'Yes' },
+//   { id: 'No', name: 'No' },
+//   { id: 'Already Done', name: 'Already Done' },
+// ];
+
 // // ─── Helper to get current time ─────────────────────────────────────────────
 // const getCurrentTime = () => {
 //   const now = new Date();
@@ -183,6 +196,7 @@
 //   models,
 //   engineers,
 //   drawers,
+//   salesReps,
 //   onConfirm,
 //   onCancel,
 //   confirmText = 'Confirm & Save',
@@ -195,6 +209,8 @@
 //   const engineerName =
 //     engineers.find((e) => e.id === values.engineerId)?.name || values.engineerId || '';
 //   const drawerName = drawers.find((d) => d.id === values.drawerId)?.name || values.drawerId || '';
+//   const salesRepName =
+//     salesReps.find((r) => r.id === values.serviceRepId)?.name || values.serviceRepId || '';
 
 //   const total =
 //     (parseFloat(values.serviceCharges) || 0) + (parseFloat(values.spareCharges) || 0);
@@ -257,6 +273,7 @@
 //               <PreviewRow label="Engineer" value={engineerName} />
 //               <PreviewRow label="Dealer" value={values.dealerName} />
 //               <PreviewRow label="Drawer" value={drawerName} />
+//               <PreviewRow label="Service Rep" value={salesRepName} />
 //               <PreviewRow
 //                 label="Service Charge"
 //                 value={values.serviceCharges ? `₹ ${values.serviceCharges}` : null}
@@ -266,6 +283,22 @@
 //                 value={values.spareCharges ? `₹ ${values.spareCharges}` : null}
 //               />
 //               <PreviewRow label="Total Estimate" value={total > 0 ? `₹ ${total}` : null} />
+//               <PreviewRow
+//                 label="Advance Amount"
+//                 value={values.advanceAmount ? `₹ ${values.advanceAmount}` : null}
+//               />
+//               <PreviewRow
+//                 label="Advance Date"
+//                 value={
+//                   values.advanceDate
+//                     ? new Date(values.advanceDate).toLocaleDateString()
+//                     : null
+//                 }
+//               />
+//               <PreviewRow
+//                 label="Margin"
+//                 value={values.marginAmount ? `₹ ${values.marginAmount}` : null}
+//               />
 //               <PreviewRow label="Payment Mode" value={values.paymentMode} />
 //               <PreviewRow
 //                 label="Repair Date"
@@ -279,6 +312,8 @@
 //                   values.deliveryDate ? new Date(values.deliveryDate).toLocaleDateString() : null
 //                 }
 //               />
+//               <PreviewRow label="Insta Follow" value={values.instaFollowers} />
+//               <PreviewRow label="Google Review" value={values.googleReview} />
 //               <PreviewRow label="Remarks" value={values.remarks} />
 //             </PreviewSection>
 
@@ -389,12 +424,13 @@
 //   const { mode, jobId } = route.params || { mode: 'new' };
 
 //   const { currentJob, loading: jobLoading } = useSelector((s) => s.jobs);
-//   const { engineers, makes, models, drawers } = useSelector((s) => s.admin);
+//   const { engineers, makes, models, drawers, salesReps = [] } = useSelector((s) => s.admin);
 
 //   const isLoading = jobLoading;
 
 //   const [openRepairDate, setOpenRepairDate] = useState(false);
 //   const [openDeliveryDate, setOpenDeliveryDate] = useState(false);
+//   const [openAdvanceDate, setOpenAdvanceDate] = useState(false);
 //   const [isConfirming, setIsConfirming] = useState(false);
 //   const [confirmModal, setConfirmModal] = useState({
 //     visible: false,
@@ -410,6 +446,7 @@
 //     if (!makes.length) dispatch(fetchMakes());
 //     if (!models.length) dispatch(fetchModels());
 //     if (!drawers.length) dispatch(fetchDrawers());
+//     if (!salesReps.length) dispatch(fetchSalesReps()); 
 //     if (mode === 'edit' && jobId) dispatch(fetchJobById(jobId));
 //     return () => {
 //       if (mode === 'edit') dispatch(clearCurrentJob());
@@ -440,12 +477,18 @@
 //       engineerId: currentJob?.engineerId || '',
 //       dealerName: currentJob?.dealerName || '',
 //       drawerId: currentJob?.drawerId || '',
+//       serviceRepId: currentJob?.serviceRepId || '',
 //       serviceCharges: currentJob?.serviceCharges?.toString() || '',
 //       spareCharges: currentJob?.spareCharges?.toString() || '',
 //       estimateAmount: currentJob?.estimateAmount?.toString() || '',
+//       advanceAmount: currentJob?.advanceAmount?.toString() || '',
+//       advanceDate: currentJob?.advanceDate ? new Date(currentJob.advanceDate) : null,
+//       marginAmount: currentJob?.marginAmount?.toString() || '',
 //       paymentMode: currentJob?.paymentMode || '',
 //       repairDate: currentJob?.repairDate ? new Date(currentJob.repairDate) : new Date(),
 //       deliveryDate: currentJob?.deliveredDate ? new Date(currentJob.deliveredDate) : new Date(),
+//       instaFollowers: currentJob?.instaFollowers || '',
+//       googleReview: currentJob?.googleReview || '',
 //       remarks: currentJob?.remarks || '',
 //       spareItems: currentJob?.spareItems || [],
 //       createdAt: currentJob?.createdAt || getCurrentDate(),
@@ -463,8 +506,24 @@
 //       (sum, item) => sum + ((parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0)),
 //       0
 //     );
-//     setFieldValue('estimateAmount', (service + spare + itemsTotal).toString());
+//     const estimate = service + spare + itemsTotal;
+//     setFieldValue('estimateAmount', estimate.toString());
+//     // Auto-calculate margin = estimate - spare (mirrors web logic)
+//     setFieldValue('marginAmount', (estimate - spare).toString());
 //     toast.show('Estimate calculated', { type: 'success' });
+//   };
+
+//   // Recalculate margin whenever serviceCharges or spareCharges change
+//   const recalculateMargin = (setFieldValue, serviceCharges, spareCharges, spareItems) => {
+//     const service = parseFloat(serviceCharges) || 0;
+//     const spare = parseFloat(spareCharges) || 0;
+//     const itemsTotal = (spareItems || []).reduce(
+//       (sum, item) => sum + ((parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0)),
+//       0
+//     );
+//     const estimate = service + spare + itemsTotal;
+//     setFieldValue('estimateAmount', estimate.toString());
+//     setFieldValue('marginAmount', (estimate - spare).toString());
 //   };
 
 //   const buildSubmitData = (values) => ({
@@ -472,6 +531,9 @@
 //     serviceCharges: parseFloat(values.serviceCharges) || 0,
 //     spareCharges: parseFloat(values.spareCharges) || 0,
 //     estimateAmount: parseFloat(values.estimateAmount) || 0,
+//     advanceAmount: parseFloat(values.advanceAmount) || 0,
+//     marginAmount: parseFloat(values.marginAmount) || 0,
+//     advanceDate: values.advanceDate ? values.advanceDate.toISOString() : null,
 //     spareItems: (values.spareItems || []).map((item) => ({
 //       name: item.name || '',
 //       qty: parseInt(item.qty) || 0,
@@ -870,7 +932,7 @@
 //                 />
 //               </View>
 
-//               {/* Service / Repair Details */}
+//               {/* ─── Service / Repair Details ─────────────────────────────── */}
 //               <View style={styles.section}>
 //                 <Text style={styles.sectionTitle}>Service / Repair Details</Text>
 
@@ -896,12 +958,16 @@
 //                   placeholder="Select Drawer"
 //                 />
 
+//                 {/* Row: Service Charges + Spare Charges */}
 //                 <View style={styles.row}>
 //                   <View style={{ flex: 1, marginRight: SPACING.sm }}>
 //                     <Input
 //                       label="Service Charges"
 //                       value={values.serviceCharges}
-//                       onChangeText={(t) => setFieldValue('serviceCharges', t)}
+//                       onChangeText={(t) => {
+//                         setFieldValue('serviceCharges', t);
+//                         recalculateMargin(setFieldValue, t, values.spareCharges, values.spareItems);
+//                       }}
 //                       keyboardType="numeric"
 //                     />
 //                   </View>
@@ -909,7 +975,10 @@
 //                     <Input
 //                       label="Spare Charges"
 //                       value={values.spareCharges}
-//                       onChangeText={(t) => setFieldValue('spareCharges', t)}
+//                       onChangeText={(t) => {
+//                         setFieldValue('spareCharges', t);
+//                         recalculateMargin(setFieldValue, values.serviceCharges, t, values.spareItems);
+//                       }}
 //                       keyboardType="numeric"
 //                     />
 //                   </View>
@@ -984,12 +1053,16 @@
 //                   </TouchableOpacity>
 //                 </View>
 
-//                 <Input
-//                   label="Estimate Amount"
-//                   value={values.estimateAmount}
-//                   onChangeText={(t) => setFieldValue('estimateAmount', t)}
-//                   keyboardType="numeric"
-//                 />
+//                 {/* Estimate Amount — read-only, auto-calculated */}
+//                 <View style={styles.readOnlyFieldWrapper}>
+//                   <Text style={styles.readOnlyLabel}>Estimate Amount</Text>
+//                   <View style={styles.readOnlyBox}>
+//                     <Text style={styles.readOnlyValue}>
+//                       {values.estimateAmount ? `₹ ${values.estimateAmount}` : '—'}
+//                     </Text>
+//                   </View>
+//                 </View>
+
 //                 <Button
 //                   title="Calculate Estimate"
 //                   onPress={() => calculateEstimate(setFieldValue, () => values)}
@@ -997,6 +1070,63 @@
 //                   style={styles.calcButton}
 //                   icon={Calculator}
 //                 />
+
+//                 {/* Row: Advance Amount + Advance Date */}
+//                 <View style={styles.row}>
+//                   <View style={{ flex: 1, marginRight: SPACING.sm }}>
+//                     <Input
+//                       label="Adv. Amount ₹"
+//                       value={values.advanceAmount}
+//                       onChangeText={(t) => setFieldValue('advanceAmount', t)}
+//                       keyboardType="numeric"
+//                     />
+//                   </View>
+//                   <View style={{ flex: 1 }}>
+//                     <Text style={styles.fieldLabel}>Adv. Date</Text>
+//                     <TouchableOpacity
+//                       onPress={() => setOpenAdvanceDate(true)}
+//                       style={styles.dateButton}
+//                     >
+//                       <Calendar size={16} color={COLORS.gray600} />
+//                       <Text style={styles.dateText}>
+//                         {values.advanceDate
+//                           ? new Date(values.advanceDate).toLocaleDateString()
+//                           : 'Select Date'}
+//                       </Text>
+//                     </TouchableOpacity>
+//                     <DatePicker
+//                       modal
+//                       open={openAdvanceDate}
+//                       date={values.advanceDate || new Date()}
+//                       onConfirm={(date) => {
+//                         setOpenAdvanceDate(false);
+//                         setFieldValue('advanceDate', date);
+//                       }}
+//                       onCancel={() => setOpenAdvanceDate(false)}
+//                     />
+//                   </View>
+//                 </View>
+
+//                 {/* Row: Margin (read-only) + Service Rep */}
+//                 <View style={styles.row}>
+//                   <View style={{ flex: 1, marginRight: SPACING.sm }}>
+//                     <Text style={styles.readOnlyLabel}>Margin ₹</Text>
+//                     <View style={styles.readOnlyBox}>
+//                       <Text style={styles.readOnlyValue}>
+//                         {values.marginAmount ? `₹ ${values.marginAmount}` : '—'}
+//                       </Text>
+//                     </View>
+//                   </View>
+//                   <View style={{ flex: 1 }}>
+//                     <SelectModal
+//                       label="Service Rep"
+//                       value={values.serviceRepId}
+//                       options={salesReps}
+//                       onSelect={(v) => setFieldValue('serviceRepId', v)}
+//                       placeholder="Select Rep"
+//                     />
+//                   </View>
+//                 </View>
 
 //                 <SelectModal
 //                   label="Payment Mode"
@@ -1006,14 +1136,15 @@
 //                   placeholder="Select Payment Mode"
 //                 />
 
-//                 {/* Date Pickers */}
+//                 {/* Repair Date */}
+//                 <Text style={styles.fieldLabel}>Repair Date</Text>
 //                 <TouchableOpacity
 //                   onPress={() => setOpenRepairDate(true)}
 //                   style={styles.dateButton}
 //                 >
 //                   <Calendar size={20} color={COLORS.gray600} />
 //                   <Text style={styles.dateText}>
-//                     Repair Date: {values.repairDate?.toLocaleDateString()}
+//                     {values.repairDate?.toLocaleDateString()}
 //                   </Text>
 //                 </TouchableOpacity>
 //                 <DatePicker
@@ -1027,13 +1158,15 @@
 //                   onCancel={() => setOpenRepairDate(false)}
 //                 />
 
+//                 {/* Delivery Date */}
+//                 <Text style={styles.fieldLabel}>Delivery Date</Text>
 //                 <TouchableOpacity
 //                   onPress={() => setOpenDeliveryDate(true)}
 //                   style={styles.dateButton}
 //                 >
 //                   <Calendar size={20} color={COLORS.gray600} />
 //                   <Text style={styles.dateText}>
-//                     Delivery Date: {values.deliveryDate?.toLocaleDateString()}
+//                     {values.deliveryDate?.toLocaleDateString()}
 //                   </Text>
 //                 </TouchableOpacity>
 //                 <DatePicker
@@ -1047,6 +1180,28 @@
 //                   onCancel={() => setOpenDeliveryDate(false)}
 //                 />
 
+//                 {/* Row: Insta Follow + Google Review */}
+//                 <View style={styles.row}>
+//                   <View style={{ flex: 1, marginRight: SPACING.sm }}>
+//                     <SelectModal
+//                       label="Insta Follow"
+//                       value={values.instaFollowers}
+//                       options={instaFollowOptions}
+//                       onSelect={(v) => setFieldValue('instaFollowers', v)}
+//                       placeholder="Select"
+//                     />
+//                   </View>
+//                   <View style={{ flex: 1 }}>
+//                     <SelectModal
+//                       label="Google Review"
+//                       value={values.googleReview}
+//                       options={googleReviewOptions}
+//                       onSelect={(v) => setFieldValue('googleReview', v)}
+//                       placeholder="Select"
+//                     />
+//                   </View>
+//                 </View>
+
 //                 <Input
 //                   label="Remarks"
 //                   value={values.remarks}
@@ -1054,6 +1209,7 @@
 //                   multiline
 //                 />
 //               </View>
+//               {/* ─── End Service / Repair Details ────────────────────────── */}
 
 //               {/* Action Buttons */}
 //               <View style={styles.actionContainer}>
@@ -1141,6 +1297,7 @@
 //               models={models}
 //               engineers={engineers}
 //               drawers={drawers}
+//               salesReps={salesReps}
 //               confirmText={cfg.confirmText}
 //               confirmColor={cfg.confirmColor}
 //               mode={mode}
@@ -1421,6 +1578,12 @@
 //   calcButton: {
 //     marginBottom: SPACING.md,
 //   },
+//   fieldLabel: {
+//     ...FONTS.medium,
+//     fontSize: 14,
+//     color: COLORS.gray700,
+//     marginBottom: SPACING.xs,
+//   },
 //   dateButton: {
 //     flexDirection: 'row',
 //     alignItems: 'center',
@@ -1436,6 +1599,30 @@
 //     fontSize: 14,
 //     color: COLORS.gray700,
 //     marginLeft: SPACING.sm,
+//   },
+//   readOnlyLabel: {
+//     ...FONTS.medium,
+//     fontSize: 14,
+//     color: COLORS.gray700,
+//     marginBottom: SPACING.xs,
+//   },
+//   readOnlyBox: {
+//     borderWidth: 1,
+//     borderColor: COLORS.gray200,
+//     borderRadius: BORDERS.radius.md,
+//     padding: SPACING.md,
+//     marginBottom: SPACING.md,
+//     backgroundColor: COLORS.gray50,
+//     height: 48,
+//     justifyContent: 'center',
+//   },
+//   readOnlyValue: {
+//     ...FONTS.regular,
+//     fontSize: 14,
+//     color: COLORS.gray500,
+//   },
+//   readOnlyFieldWrapper: {
+//     marginBottom: SPACING.sm,
 //   },
 //   actionContainer: {
 //     marginTop: SPACING.md,
@@ -1521,7 +1708,7 @@
 //   },
 // });
 
-//+++++++++++++++++++++++++++++++++++
+//======================================
 
 // src/screens/jobsheet/JobSheetFormScreen.js
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1534,6 +1721,8 @@ import {
   StyleSheet,
   Modal,
   Platform,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -1571,7 +1760,7 @@ import {
   fetchMakes,
   fetchModels,
   fetchDrawers,
-  fetchSalesReps
+  fetchSalesReps,
 } from '../../store/slices/adminSlice';
 import {
   Button,
@@ -1583,6 +1772,208 @@ import {
 import { COLORS, SPACING, FONTS, SHADOWS, BORDERS } from '../../utils/theme';
 import { useToast } from 'react-native-toast-notifications';
 import { useAuth } from '../../context/AuthContext';
+
+// ─── API base (mirrors web's import.meta.env.VITE_API_URL) ──────────────────
+import { API_BASE_URL } from '@env';
+import axios from 'axios';
+
+// ─── CustomerAutocomplete (RN equivalent of web CustomerAutocomplete) ────────
+const CustomerAutocomplete = ({
+  label,
+  type,           // 'name' | 'contact'
+  value,
+  onChange,
+  onSelect,
+  placeholder,
+  maxLength,
+  keyboardType,
+  required,
+  error,
+}) => {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (!value || value.trim().length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/jobsheets/customers/search`, {
+          params: { q: value, type },
+        });
+        setSuggestions(res.data || []);
+        setShowSuggestions((res.data || []).length > 0);
+      } catch (err) {
+        console.error('Customer search error:', err.message);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [value, type]);
+
+  const handleSelect = (customer) => {
+    Keyboard.dismiss();
+    setShowSuggestions(false);
+    setSuggestions([]);
+    onSelect(customer);
+  };
+
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <View style={{ marginBottom: SPACING.lg }}>
+      {label && (
+        <Text style={[cac.label, { color: error ? COLORS.error : COLORS.gray600 }]}>
+          {label}{required && <Text style={{ color: COLORS.error }}> *</Text>}
+        </Text>
+      )}
+      <View style={[cac.inputContainer, {
+        borderColor: error ? COLORS.error : isFocused ? COLORS.primary : COLORS.gray200,
+      }]}>
+        <TextInput
+          style={cac.input}
+          value={value}
+          onChangeText={(t) => {
+            // Strip non-digits for contact type, mirrors web filterNumbers
+            const val = type === 'contact' ? t.replace(/\D/g, '') : t;
+            onChange(val);
+            setShowSuggestions(true);
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.gray400}
+          keyboardType={keyboardType || 'default'}
+          maxLength={maxLength}
+          autoComplete="off"
+          autoCorrect={false}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => {
+            setIsFocused(false);
+            // Delay hide so tap on suggestion registers first
+            setTimeout(() => setShowSuggestions(false), 200);
+          }}
+        />
+        {loading && (
+          <ActivityIndicator
+            size="small"
+            color={COLORS.gray400}
+            style={{ marginLeft: SPACING.sm }}
+          />
+        )}
+      </View>
+      {error && <Text style={cac.errorText}>{error}</Text>}
+
+      {/* Dropdown suggestions */}
+      {showSuggestions && suggestions.length > 0 && (
+        <View style={cac.dropdown}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {suggestions.map((item, idx) => (
+              <TouchableOpacity
+                key={String(idx)}
+                style={[
+                  cac.suggestionItem,
+                  idx < suggestions.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+                ]}
+                onPress={() => handleSelect(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={cac.suggestionName}>{item.name}</Text>
+                <Text style={cac.suggestionContact}>📞 {item.contact}</Text>
+                {!!item.address && (
+                  <Text style={cac.suggestionAddress}>📍 {item.address}</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// CustomerAutocomplete styles
+const cac = StyleSheet.create({
+  label: {
+    ...FONTS.medium,
+    fontSize: 14,
+    marginBottom: SPACING.xs,
+    color: COLORS.gray700,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BORDERS.radius.md,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.white,
+    height: 48,
+  },
+  input: {
+    flex: 1,
+    ...FONTS.regular,
+    fontSize: 16,
+    color: COLORS.gray900,
+    paddingVertical: SPACING.sm,
+  },
+  errorText: {
+    ...FONTS.regular,
+    fontSize: 12,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 78,          // label (~20) + gap (~6) + input (48) + 4
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    elevation: 10,    // Android shadow
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.gray200,
+    borderRadius: BORDERS.radius.md,
+    maxHeight: 240,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  suggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray100,
+  },
+  suggestionName: {
+    ...FONTS.semibold,
+    fontSize: 14,
+    color: COLORS.gray900,
+  },
+  suggestionContact: {
+    ...FONTS.regular,
+    fontSize: 12,
+    color: COLORS.gray500,
+    marginTop: 2,
+  },
+  suggestionAddress: {
+    ...FONTS.regular,
+    fontSize: 11,
+    color: COLORS.gray400,
+    marginTop: 2,
+  },
+});
 
 // ─── Validation Schema ──────────────────────────────────────────────────────
 const JobSheetSchema = yup.object().shape({
@@ -1837,8 +2228,8 @@ const PreviewConfirmModal = ({
                   values.deliveryDate ? new Date(values.deliveryDate).toLocaleDateString() : null
                 }
               />
-              <PreviewRow label="Insta Follow" value={values.instaFollowers} />
-              <PreviewRow label="Google Review" value={values.googleReview} />
+              <PreviewRow label="📸 Insta Follow" value={values.instaFollowers} />
+              <PreviewRow label="⭐ Google Review" value={values.googleReview} />
               <PreviewRow label="Remarks" value={values.remarks} />
             </PreviewSection>
 
@@ -1971,7 +2362,7 @@ export default function JobSheetFormScreen() {
     if (!makes.length) dispatch(fetchMakes());
     if (!models.length) dispatch(fetchModels());
     if (!drawers.length) dispatch(fetchDrawers());
-    if (!salesReps.length) dispatch(fetchSalesReps()); 
+    if (!salesReps.length) dispatch(fetchSalesReps());
     if (mode === 'edit' && jobId) dispatch(fetchJobById(jobId));
     return () => {
       if (mode === 'edit') dispatch(clearCurrentJob());
@@ -2335,21 +2726,61 @@ export default function JobSheetFormScreen() {
               {/* Customer Information */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Customer Details</Text>
-                <Input
+
+                {/* Customer Name — with autocomplete */}
+                <CustomerAutocomplete
                   label="Customer Name"
+                  type="name"
                   value={values.customerName}
-                  onChangeText={(t) => setFieldValue('customerName', t)}
+                  onChange={(t) => setFieldValue('customerName', t)}
+                  onSelect={(customer) => {
+                    setFieldValue('customerName', customer.name || '');
+                    setFieldValue('contact', customer.contact || '');
+                    setFieldValue('altContact', customer.altContact || '');
+                    setFieldValue('address', customer.address || '');
+                    setFieldValue('email', customer.email || '');
+                    setFieldValue(
+                      'instaFollowers',
+                      customer.instaFollowers === 'Already Done' ? 'Already Done' : ''
+                    );
+                    setFieldValue(
+                      'googleReview',
+                      customer.googleReview === 'Already Done' ? 'Already Done' : ''
+                    );
+                  }}
+                  placeholder="Customer Name *"
                   required
                   error={touched.customerName && errors.customerName}
                 />
-                <Input
+
+                {/* Contact No — with autocomplete */}
+                <CustomerAutocomplete
                   label="Contact No"
+                  type="contact"
                   value={values.contact}
-                  onChangeText={(t) => setFieldValue('contact', t)}
+                  onChange={(t) => setFieldValue('contact', t)}
+                  onSelect={(customer) => {
+                    setFieldValue('customerName', customer.name || '');
+                    setFieldValue('contact', customer.contact || '');
+                    setFieldValue('altContact', customer.altContact || '');
+                    setFieldValue('address', customer.address || '');
+                    setFieldValue('email', customer.email || '');
+                    setFieldValue(
+                      'instaFollowers',
+                      customer.instaFollowers === 'Already Done' ? 'Already Done' : ''
+                    );
+                    setFieldValue(
+                      'googleReview',
+                      customer.googleReview === 'Already Done' ? 'Already Done' : ''
+                    );
+                  }}
+                  placeholder="Contact No *"
                   keyboardType="phone-pad"
+                  maxLength={10}
                   required
                   error={touched.contact && errors.contact}
                 />
+
                 <Input
                   label="Alt Contact"
                   value={values.altContact}
@@ -2709,7 +3140,7 @@ export default function JobSheetFormScreen() {
                 <View style={styles.row}>
                   <View style={{ flex: 1, marginRight: SPACING.sm }}>
                     <SelectModal
-                      label="Insta Follow"
+                      label="📸 Insta Follow"
                       value={values.instaFollowers}
                       options={instaFollowOptions}
                       onSelect={(v) => setFieldValue('instaFollowers', v)}
@@ -2718,7 +3149,7 @@ export default function JobSheetFormScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <SelectModal
-                      label="Google Review"
+                      label="⭐ Google Review"
                       value={values.googleReview}
                       options={googleReviewOptions}
                       onSelect={(v) => setFieldValue('googleReview', v)}

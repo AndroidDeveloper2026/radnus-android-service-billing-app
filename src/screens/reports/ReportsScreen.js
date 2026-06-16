@@ -52,6 +52,7 @@ import {
   fetchDailySummary,
   fetchPendingReport,
   fetchDeliveredNRNAReport,
+  fetchRebillReport,
 } from '../../store/slices/reportSlice';
 import { fetchJobs } from '../../store/slices/jobSlice';
 
@@ -103,6 +104,7 @@ const REPORT_TABS = [
   { id: 'repairPending', name: 'R Pend', Icon: Clock },
   { id: 'deliveryPending', name: 'D Pend', Icon: Truck },
   { id: 'deliveredNRNA', name: 'NR/NA', Icon: AlertTriangle },
+  { id: 'rebill', name: 'Rebill', Icon: Receipt },
 ];
 
 const STATUS_OPTIONS = ['All', 'Received', 'Pending', 'Repairing', 'Repaired', 'Delivered'];
@@ -289,6 +291,7 @@ const ReportsScreen = () => {
     dailySummary = [],
     pendingReport = [],
     deliveredNRNA = [],
+    rebillReport = [], 
     loading: reportLoading = false,
   } = useSelector(state => state.reports || {});
   const { list = [], loading: jobsLoading = false } = useSelector(state => state.jobs || {});
@@ -408,6 +411,25 @@ const ReportsScreen = () => {
     { label: 'Count', key: 'count', width: 80, render: (item) => safeNum(item.count) },
   ], []);
 
+
+  // rebill columns
+  // In ReportsScreen.js, add new column definitions:
+
+const rebillColumns = useMemo(() => [
+  { label: '#', key: 'index', width: 45 },
+  { label: 'Job No', key: 'jobSheetNo', width: 95, bold: true },
+  { label: 'Customer', key: 'customer', width: 120, render: (item) => item.customer?.name },
+  { label: 'Contact', key: 'contact', width: 95, render: (item) => item.customer?.contact },
+  { label: 'Model', key: 'model', width: 100, render: (item) => item.device?.model },
+  { label: 'Status', key: 'status', width: 85 },
+  { label: 'Rebills', key: 'rebills', width: 80, render: (item) => item.rebillHistory?.length || 0 },
+  { label: 'Total', key: 'total', width: 85, bold: true, render: (item) => {
+    const histTotal = item.rebillHistory?.reduce((s, r) => s + safeNum(r.serviceCharge) + safeNum(r.spareCharge), 0) || 0;
+    const currTotal = safeNum(item.service?.serviceCharge) + safeNum(item.service?.spareCharge);
+    return `₹${(histTotal + currTotal).toLocaleString()}`;
+  }},
+], []);
+
   // Calculated totals
   const valueReportTotal = useMemo(() => 
     valueReport.reduce((sum, item) => sum + safeNum(item.total), 0), 
@@ -448,6 +470,9 @@ const ReportsScreen = () => {
       case 'all':
         dispatch(fetchJobs(filterParams));
         break;
+      case 'rebill':  // ← Add this case
+      dispatch(fetchRebillReport(filterParams));
+      break;
       case 'dailyReceived':
         dispatch(fetchDailySummary({ type: 'received', fromDate: fd, toDate: td }));
         break;
@@ -572,6 +597,10 @@ const ReportsScreen = () => {
         exportData = dealerReport;
         filename = 'Dealer_Report';
         break;
+      case 'rebill':  // ← Add this case
+        exportData = rebillReport;
+        filename = 'Rebill_Report';
+        break;
       default:
         exportData = filteredList;
         filename = 'Reports';
@@ -621,7 +650,7 @@ const ReportsScreen = () => {
     } catch (error) {
       Alert.alert('Export Failed', 'Could not export file');
     }
-  }, [activeTab, filteredList, valueReport, spareReport, dealerReport, engineerReport, noEngineerJobs]);
+  }, [activeTab, filteredList, valueReport, spareReport, dealerReport, engineerReport, noEngineerJobs, rebillReport]);
 
   // Engineer report data
   const engineerReportData = useMemo(() => {
@@ -660,6 +689,8 @@ const ReportsScreen = () => {
         return <OptimizedTable columns={spareColumns} data={spareReport} grandTotal={spareReportTotal} />;
       case 'dealer':
         return <OptimizedTable columns={dealerColumns} data={dealerReport} onPress={navigateToJobDetail} />;
+      case 'rebill':  // ← Add this case
+      return <OptimizedTable columns={rebillColumns} data={rebillReport} onPress={navigateToJobDetail} />;
       case 'dailyReceived':
       case 'dailyDelivered':
       case 'dailyRepaired':
@@ -672,7 +703,7 @@ const ReportsScreen = () => {
       default:
         return <OptimizedTable columns={allReportsColumns} data={filteredList} onPress={navigateToJobDetail} />;
     }
-  }, [activeTab, allReportsColumns, filteredList, navigateToJobDetail, engineerColumns, engineerReportData, valueColumns, valueReport, valueReportTotal, spareColumns, spareReport, spareReportTotal, dealerColumns, dealerReport, dailyColumns, dailySummary, pendingColumns, pendingReport, deliveredNRNA]);
+  }, [activeTab, allReportsColumns, filteredList, navigateToJobDetail, engineerColumns, engineerReportData, valueColumns, valueReport, valueReportTotal, spareColumns, spareReport, spareReportTotal, dealerColumns, dealerReport, dailyColumns, dailySummary, pendingColumns, pendingReport, deliveredNRNA,rebillColumns,rebillReport]);
 
   return (
     <View style={styles.container}>
