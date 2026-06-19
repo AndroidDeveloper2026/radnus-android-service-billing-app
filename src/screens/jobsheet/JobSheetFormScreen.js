@@ -12,6 +12,7 @@ import {
   Keyboard,
   Image,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -61,11 +62,14 @@ import {
   CheckboxItem,
   LoadingOverlay,
 } from '../../components/UI';
+import SparePopup from '../../components/SparePopup';
 import { COLORS, SPACING, FONTS, SHADOWS, BORDERS } from '../../utils/theme';
 import { useToast } from 'react-native-toast-notifications';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '@env';
 import axios from 'axios';
+
+const { width, height } = Dimensions.get('window');
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const physicalOptions = [
@@ -947,6 +951,9 @@ export default function JobSheetFormScreen() {
     action: null,
     pendingValues: null,
   });
+  
+  // Spare Popup State
+  const [sparePopupVisible, setSparePopupVisible] = useState(false);
 
   const savedJobIdRef = useRef(jobId || null);
   const isLoading = jobLoading;
@@ -1314,686 +1321,692 @@ export default function JobSheetFormScreen() {
           const buttonsDisabled = isConfirming;
 
           return (
-            <View style={{ padding: SPACING.lg, paddingBottom: SPACING.xxl }}>
-              {/* ─── Job Sheet Header ──────────────────────────────────── */}
-              <View style={styles.section}>
-                <View style={styles.jobSheetHeader}>
-                  <View style={styles.jobSheetHeaderLeft}>
-                    <FileText size={18} color={COLORS.primary} />
-                    <Text style={styles.jobSheetNo}>
-                      Job Sheet No: {values.jobSheetNo || 'New'}
-                    </Text>
-                  </View>
-                  <View style={styles.dateTimeContainer}>
-                    <View style={styles.dateTimeItem}>
-                      <Calendar size={14} color={COLORS.gray500} />
-                      <Text style={styles.dateTimeText}>
-                        {values.createdAt || getCurrentDate()}
+            <>
+              <View style={{ padding: SPACING.lg, paddingBottom: SPACING.xxl }}>
+                {/* ─── Job Sheet Header ──────────────────────────────────── */}
+                <View style={styles.section}>
+                  <View style={styles.jobSheetHeader}>
+                    <View style={styles.jobSheetHeaderLeft}>
+                      <FileText size={18} color={COLORS.primary} />
+                      <Text style={styles.jobSheetNo}>
+                        Job Sheet No: {values.jobSheetNo || 'New'}
                       </Text>
                     </View>
-                    <View style={styles.dateTimeItem}>
-                      <Clock size={14} color={COLORS.gray500} />
-                      <Text style={styles.dateTimeText}>
-                        {values.time || getCurrentTime()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* ─── Search Bar ───────────────────────────────────────── */}
-              <View style={styles.searchSection}>
-                <View style={styles.searchRow}>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search Job Sheet / IMEI / Contact / Name"
-                    placeholderTextColor={COLORS.gray400}
-                    value={searchText}
-                    onChangeText={setSearchText}
-                    onSubmitEditing={handleSearch}
-                  />
-                  <TouchableOpacity
-                    onPress={handleSearch}
-                    style={styles.searchButton}
-                    disabled={searchLoading}
-                  >
-                    {searchLoading ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <Search size={20} color={COLORS.white} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* ─── Physical Condition ───────────────────────────────── */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Physical Condition</Text>
-                <View style={styles.checkboxGroup}>
-                  {physicalOptions.map(opt => (
-                    <CheckboxItem
-                      key={opt}
-                      label={opt}
-                      checked={values.physicalConditions?.includes(opt)}
-                      onToggle={() => {
-                        const exists = values.physicalConditions?.includes(opt);
-                        setFieldValue(
-                          'physicalConditions',
-                          exists
-                            ? values.physicalConditions.filter(i => i !== opt)
-                            : [...(values.physicalConditions || []), opt],
-                        );
-                      }}
-                    />
-                  ))}
-                </View>
-                <Input
-                  label="Other Details"
-                  value={values.batteryNumber}
-                  onChangeText={t => setFieldValue('batteryNumber', t)}
-                  placeholder="Other Details"
-                />
-              </View>
-
-              {/* ─── Accessories Received ─────────────────────────────── */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Accessories Received</Text>
-                <View style={styles.checkboxGroup}>
-                  {accessoryOptions.map(opt => (
-                    <CheckboxItem
-                      key={opt}
-                      label={opt}
-                      checked={values.accessoriesReceived?.includes(opt)}
-                      onToggle={() => {
-                        const exists =
-                          values.accessoriesReceived?.includes(opt);
-                        setFieldValue(
-                          'accessoriesReceived',
-                          exists
-                            ? values.accessoriesReceived.filter(i => i !== opt)
-                            : [...(values.accessoriesReceived || []), opt],
-                        );
-                      }}
-                    />
-                  ))}
-                </View>
-                <Input
-                  label="Battery Number"
-                  value={values.batteryNumber}
-                  onChangeText={t => setFieldValue('batteryNumber', t)}
-                  placeholder="Battery Number"
-                />
-              </View>
-
-              {/* ─── Customer Details ─────────────────────────────────── */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Customer Details</Text>
-
-                <CustomerAutocomplete
-                  label="Customer Name"
-                  type="name"
-                  value={values.customerName}
-                  onChange={t => setFieldValue('customerName', t)}
-                  onSelect={customer => {
-                    setFieldValue('customerName', customer.name || '');
-                    setFieldValue('contact', customer.contact || '');
-                    setFieldValue('altContact', customer.altContact || '');
-                    setFieldValue('address', customer.address || '');
-                    setFieldValue('email', customer.email || '');
-                    setFieldValue(
-                      'instaFollowers',
-                      customer.instaFollowers === 'Already Done'
-                        ? 'Already Done'
-                        : '',
-                    );
-                    setFieldValue(
-                      'googleReview',
-                      customer.googleReview === 'Already Done'
-                        ? 'Already Done'
-                        : '',
-                    );
-                  }}
-                  placeholder="Customer Name *"
-                  required
-                  error={touched.customerName && errors.customerName}
-                />
-
-                <CustomerAutocomplete
-                  label="Contact No"
-                  type="contact"
-                  value={values.contact}
-                  onChange={t => setFieldValue('contact', t)}
-                  onSelect={customer => {
-                    setFieldValue('customerName', customer.name || '');
-                    setFieldValue('contact', customer.contact || '');
-                    setFieldValue('altContact', customer.altContact || '');
-                    setFieldValue('address', customer.address || '');
-                    setFieldValue('email', customer.email || '');
-                    setFieldValue(
-                      'instaFollowers',
-                      customer.instaFollowers === 'Already Done'
-                        ? 'Already Done'
-                        : '',
-                    );
-                    setFieldValue(
-                      'googleReview',
-                      customer.googleReview === 'Already Done'
-                        ? 'Already Done'
-                        : '',
-                    );
-                  }}
-                  placeholder="Contact No *"
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  required
-                  error={touched.contact && errors.contact}
-                />
-
-                <Input
-                  label="Alt Contact"
-                  value={values.altContact}
-                  onChangeText={t => setFieldValue('altContact', t)}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  placeholder="Alt Contact"
-                />
-                <Input
-                  label="Customer Address"
-                  value={values.address}
-                  onChangeText={t => setFieldValue('address', t)}
-                  multiline
-                  placeholder="Customer Address"
-                />
-                <Input
-                  label="Email ID"
-                  value={values.email}
-                  onChangeText={t => setFieldValue('email', t)}
-                  keyboardType="email-address"
-                  placeholder="Email ID"
-                  error={touched.email && errors.email}
-                />
-
-                <SelectModal
-                  label="Select ID Proof"
-                  value={values.idProof}
-                  options={idProofOptions}
-                  onSelect={v => setFieldValue('idProof', v)}
-                  placeholder="Select ID Proof"
-                />
-
-                <IDProofUpload
-                  value={idProofPreview}
-                  onChange={file => {
-                    setIdProofImage(file);
-                    setIdProofPreview(file ? file.uri : null);
-                  }}
-                  idProofType={values.idProof}
-                />
-              </View>
-
-              {/* ─── Device Details ───────────────────────────────────── */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Device Details</Text>
-
-                <SelectModal
-                  label="Search Make"
-                  value={values.makeId}
-                  options={makes}
-                  onSelect={v => {
-                    setFieldValue('makeId', v);
-                    setFieldValue('modelId', '');
-                  }}
-                  placeholder="Search Make..."
-                />
-
-                <SelectModal
-                  label="Search Model"
-                  value={values.modelId}
-                  options={filteredModels}
-                  onSelect={v => setFieldValue('modelId', v)}
-                  placeholder="Search Model..."
-                />
-
-                <Input
-                  label="IMEI"
-                  value={values.imei}
-                  onChangeText={t => setFieldValue('imei', t)}
-                  keyboardType="numeric"
-                  maxLength={15}
-                  placeholder="IMEI *"
-                />
-
-                <SelectModal
-                  label="Status"
-                  value={values.status}
-                  options={statusOptions}
-                  onSelect={v => setFieldValue('status', v)}
-                  placeholder="All Status"
-                />
-
-                <SelectModal
-                  label="Warranty"
-                  value={values.warranty}
-                  options={warrantyOptions}
-                  onSelect={v => setFieldValue('warranty', v)}
-                />
-
-                <Input
-                  label="Pattern / PIN"
-                  value={values.patternPin}
-                  onChangeText={t => setFieldValue('patternPin', t)}
-                  placeholder="Pattern / PIN"
-                />
-              </View>
-
-              {/* ─── Service / Repair Details ─────────────────────────── */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  Service / Repair Details
-                </Text>
-
-                {/* ── Engineer Select with workload badges ── */}
-                <EngineerSelectModal
-                  engineers={engineers}
-                  workloadMap={workloadMap}
-                  value={values.engineerId}
-                  onSelect={v => setFieldValue('engineerId', v)}
-                />
-
-                <Input
-                  label="Dealer Name"
-                  value={values.dealerName}
-                  onChangeText={t => setFieldValue('dealerName', t)}
-                  placeholder="Dealer Name"
-                />
-
-                <SelectModal
-                  label="Select Drawer"
-                  value={values.drawerId}
-                  options={drawers}
-                  onSelect={v => setFieldValue('drawerId', v)}
-                  placeholder="Select Drawer"
-                />
-
-                <View style={styles.row}>
-                  <View style={{ flex: 1, marginRight: SPACING.sm }}>
-                    <Input
-                      label="Service Charges"
-                      value={values.serviceCharges}
-                      onChangeText={t => {
-                        const val = onlyNumbers(t);
-                        setFieldValue('serviceCharges', val);
-                        recalculateMargin(
-                          setFieldValue,
-                          val,
-                          values.spareCharges,
-                          values.spareItems,
-                        );
-                      }}
-                      keyboardType="numeric"
-                      placeholder="Service Charges"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Input
-                      label="Spare Charges"
-                      value={values.spareCharges}
-                      onChangeText={t => {
-                        const val = onlyNumbers(t);
-                        setFieldValue('spareCharges', val);
-                        recalculateMargin(
-                          setFieldValue,
-                          values.serviceCharges,
-                          val,
-                          values.spareItems,
-                        );
-                      }}
-                      keyboardType="numeric"
-                      placeholder="Spare Charges"
-                    />
-                  </View>
-                </View>
-
-                {/* ── Spare Parts ── */}
-                <View style={{ marginTop: SPACING.md }}>
-                  <Text style={styles.subsectionTitle}>Spare Parts</Text>
-                  {(values.spareItems || []).map((item, index) => (
-                    <View key={item.id || index} style={styles.spareItemCard}>
-                      <View style={styles.spareItemRow}>
-                        <TextInput
-                          placeholder="Part name"
-                          value={item.name}
-                          onChangeText={v => {
-                            const n = [...(values.spareItems || [])];
-                            n[index] = { ...n[index], name: v };
-                            setFieldValue('spareItems', n);
-                          }}
-                          style={styles.spareInputName}
-                          placeholderTextColor={COLORS.gray400}
-                        />
-                        <TextInput
-                          placeholder="Qty"
-                          value={item.qty?.toString()}
-                          onChangeText={v => {
-                            const n = [...(values.spareItems || [])];
-                            n[index] = { ...n[index], qty: v };
-                            setFieldValue('spareItems', n);
-                          }}
-                          keyboardType="numeric"
-                          style={styles.spareInputSmall}
-                          placeholderTextColor={COLORS.gray400}
-                        />
-                        <TextInput
-                          placeholder="Rate"
-                          value={item.rate?.toString()}
-                          onChangeText={v => {
-                            const n = [...(values.spareItems || [])];
-                            n[index] = { ...n[index], rate: v };
-                            setFieldValue('spareItems', n);
-                          }}
-                          keyboardType="numeric"
-                          style={styles.spareInputSmall}
-                          placeholderTextColor={COLORS.gray400}
-                        />
-                        <TouchableOpacity
-                          onPress={() =>
-                            setFieldValue(
-                              'spareItems',
-                              (values.spareItems || []).filter(
-                                (_, i) => i !== index,
-                              ),
-                            )
-                          }
-                          style={styles.removeButton}
-                        >
-                          <Trash2 size={18} color={COLORS.danger} />
-                        </TouchableOpacity>
+                    <View style={styles.dateTimeContainer}>
+                      <View style={styles.dateTimeItem}>
+                        <Calendar size={14} color={COLORS.gray500} />
+                        <Text style={styles.dateTimeText}>
+                          {values.createdAt || getCurrentDate()}
+                        </Text>
+                      </View>
+                      <View style={styles.dateTimeItem}>
+                        <Clock size={14} color={COLORS.gray500} />
+                        <Text style={styles.dateTimeText}>
+                          {values.time || getCurrentTime()}
+                        </Text>
                       </View>
                     </View>
-                  ))}
-                  <TouchableOpacity
-                    onPress={() =>
-                      setFieldValue('spareItems', [
-                        ...(values.spareItems || []),
-                        {
-                          id: Date.now().toString(),
-                          name: '',
-                          qty: '1',
-                          rate: '',
-                        },
-                      ])
-                    }
-                    style={styles.addSpareButton}
-                  >
-                    <Plus size={18} color={COLORS.primary} />
-                    <Text style={styles.addSpareText}>Add Spare Part</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.readOnlyFieldWrapper}>
-                  <Text style={styles.readOnlyLabel}>
-                    Estimate Amount / Time
-                  </Text>
-                  <View style={styles.readOnlyBox}>
-                    <Text style={styles.readOnlyValue}>
-                      {values.estimateAmount
-                        ? `Rs. ${values.estimateAmount}`
-                        : '—'}
-                    </Text>
                   </View>
                 </View>
 
-                <Button
-                  title="Calculate Estimate"
-                  onPress={() => calculateEstimate(setFieldValue, () => values)}
-                  variant="secondary"
-                  style={styles.calcButton}
-                  icon={Calculator}
-                />
-
-                <SelectModal
-                  label="Payment Mode"
-                  value={values.paymentMode}
-                  options={paymentOptions}
-                  onSelect={v => setFieldValue('paymentMode', v)}
-                  placeholder="Payment Mode"
-                />
-
-                <View style={styles.row}>
-                  <View style={{ flex: 1, marginRight: SPACING.sm }}>
-                    <Input
-                      label="Adv. Amount"
-                      value={values.advanceAmount}
-                      onChangeText={t =>
-                        setFieldValue('advanceAmount', onlyNumbers(t))
-                      }
-                      keyboardType="numeric"
-                      placeholder="Adv. Amount"
+                {/* ─── Search Bar ───────────────────────────────────────── */}
+                <View style={styles.searchSection}>
+                  <View style={styles.searchRow}>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search Job Sheet / IMEI / Contact / Name"
+                      placeholderTextColor={COLORS.gray400}
+                      value={searchText}
+                      onChangeText={setSearchText}
+                      onSubmitEditing={handleSearch}
                     />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Adv. Date</Text>
                     <TouchableOpacity
-                      onPress={() => setOpenAdvanceDate(true)}
-                      style={styles.dateButton}
+                      onPress={handleSearch}
+                      style={styles.searchButton}
+                      disabled={searchLoading}
                     >
-                      <Calendar size={16} color={COLORS.gray600} />
-                      <Text style={styles.dateText}>
-                        {values.advanceDate
-                          ? new Date(values.advanceDate).toLocaleDateString()
-                          : 'Select Date'}
-                      </Text>
+                      {searchLoading ? (
+                        <ActivityIndicator size="small" color={COLORS.white} />
+                      ) : (
+                        <Search size={20} color={COLORS.white} />
+                      )}
                     </TouchableOpacity>
-                    <DatePicker
-                      modal
-                      open={openAdvanceDate}
-                      date={values.advanceDate || new Date()}
-                      onConfirm={date => {
-                        setOpenAdvanceDate(false);
-                        setFieldValue('advanceDate', date);
-                      }}
-                      onCancel={() => setOpenAdvanceDate(false)}
-                    />
                   </View>
                 </View>
 
-                <View style={styles.row}>
-                  <View style={{ flex: 1, marginRight: SPACING.sm }}>
-                    <Text style={styles.readOnlyLabel}>Margin</Text>
+                {/* ─── Physical Condition ───────────────────────────────── */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Physical Condition</Text>
+                  <View style={styles.checkboxGroup}>
+                    {physicalOptions.map(opt => (
+                      <CheckboxItem
+                        key={opt}
+                        label={opt}
+                        checked={values.physicalConditions?.includes(opt)}
+                        onToggle={() => {
+                          const exists = values.physicalConditions?.includes(opt);
+                          setFieldValue(
+                            'physicalConditions',
+                            exists
+                              ? values.physicalConditions.filter(i => i !== opt)
+                              : [...(values.physicalConditions || []), opt],
+                          );
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <Input
+                    label="Other Details"
+                    value={values.batteryNumber}
+                    onChangeText={t => setFieldValue('batteryNumber', t)}
+                    placeholder="Other Details"
+                  />
+                </View>
+
+                {/* ─── Accessories Received ─────────────────────────────── */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Accessories Received</Text>
+                  <View style={styles.checkboxGroup}>
+                    {accessoryOptions.map(opt => (
+                      <CheckboxItem
+                        key={opt}
+                        label={opt}
+                        checked={values.accessoriesReceived?.includes(opt)}
+                        onToggle={() => {
+                          const exists =
+                            values.accessoriesReceived?.includes(opt);
+                          setFieldValue(
+                            'accessoriesReceived',
+                            exists
+                              ? values.accessoriesReceived.filter(i => i !== opt)
+                              : [...(values.accessoriesReceived || []), opt],
+                          );
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <Input
+                    label="Battery Number"
+                    value={values.batteryNumber}
+                    onChangeText={t => setFieldValue('batteryNumber', t)}
+                    placeholder="Battery Number"
+                  />
+                </View>
+
+                {/* ─── Customer Details ─────────────────────────────────── */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Customer Details</Text>
+
+                  <CustomerAutocomplete
+                    label="Customer Name"
+                    type="name"
+                    value={values.customerName}
+                    onChange={t => setFieldValue('customerName', t)}
+                    onSelect={customer => {
+                      setFieldValue('customerName', customer.name || '');
+                      setFieldValue('contact', customer.contact || '');
+                      setFieldValue('altContact', customer.altContact || '');
+                      setFieldValue('address', customer.address || '');
+                      setFieldValue('email', customer.email || '');
+                      setFieldValue(
+                        'instaFollowers',
+                        customer.instaFollowers === 'Already Done'
+                          ? 'Already Done'
+                          : '',
+                      );
+                      setFieldValue(
+                        'googleReview',
+                        customer.googleReview === 'Already Done'
+                          ? 'Already Done'
+                          : '',
+                      );
+                    }}
+                    placeholder="Customer Name *"
+                    required
+                    error={touched.customerName && errors.customerName}
+                  />
+
+                  <CustomerAutocomplete
+                    label="Contact No"
+                    type="contact"
+                    value={values.contact}
+                    onChange={t => setFieldValue('contact', t)}
+                    onSelect={customer => {
+                      setFieldValue('customerName', customer.name || '');
+                      setFieldValue('contact', customer.contact || '');
+                      setFieldValue('altContact', customer.altContact || '');
+                      setFieldValue('address', customer.address || '');
+                      setFieldValue('email', customer.email || '');
+                      setFieldValue(
+                        'instaFollowers',
+                        customer.instaFollowers === 'Already Done'
+                          ? 'Already Done'
+                          : '',
+                      );
+                      setFieldValue(
+                        'googleReview',
+                        customer.googleReview === 'Already Done'
+                          ? 'Already Done'
+                          : '',
+                      );
+                    }}
+                    placeholder="Contact No *"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    required
+                    error={touched.contact && errors.contact}
+                  />
+
+                  <Input
+                    label="Alt Contact"
+                    value={values.altContact}
+                    onChangeText={t => setFieldValue('altContact', t)}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    placeholder="Alt Contact"
+                  />
+                  <Input
+                    label="Customer Address"
+                    value={values.address}
+                    onChangeText={t => setFieldValue('address', t)}
+                    multiline
+                    placeholder="Customer Address"
+                  />
+                  <Input
+                    label="Email ID"
+                    value={values.email}
+                    onChangeText={t => setFieldValue('email', t)}
+                    keyboardType="email-address"
+                    placeholder="Email ID"
+                    error={touched.email && errors.email}
+                  />
+
+                  <SelectModal
+                    label="Select ID Proof"
+                    value={values.idProof}
+                    options={idProofOptions}
+                    onSelect={v => setFieldValue('idProof', v)}
+                    placeholder="Select ID Proof"
+                  />
+
+                  <IDProofUpload
+                    value={idProofPreview}
+                    onChange={file => {
+                      setIdProofImage(file);
+                      setIdProofPreview(file ? file.uri : null);
+                    }}
+                    idProofType={values.idProof}
+                  />
+                </View>
+
+                {/* ─── Device Details ───────────────────────────────────── */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Device Details</Text>
+
+                  <SelectModal
+                    label="Search Make"
+                    value={values.makeId}
+                    options={makes}
+                    onSelect={v => {
+                      setFieldValue('makeId', v);
+                      setFieldValue('modelId', '');
+                    }}
+                    placeholder="Search Make..."
+                  />
+
+                  <SelectModal
+                    label="Search Model"
+                    value={values.modelId}
+                    options={filteredModels}
+                    onSelect={v => setFieldValue('modelId', v)}
+                    placeholder="Search Model..."
+                  />
+
+                  <Input
+                    label="IMEI"
+                    value={values.imei}
+                    onChangeText={t => setFieldValue('imei', t)}
+                    keyboardType="numeric"
+                    maxLength={15}
+                    placeholder="IMEI *"
+                  />
+
+                  <SelectModal
+                    label="Status"
+                    value={values.status}
+                    options={statusOptions}
+                    onSelect={v => setFieldValue('status', v)}
+                    placeholder="All Status"
+                  />
+
+                  <SelectModal
+                    label="Warranty"
+                    value={values.warranty}
+                    options={warrantyOptions}
+                    onSelect={v => setFieldValue('warranty', v)}
+                  />
+
+                  <Input
+                    label="Pattern / PIN"
+                    value={values.patternPin}
+                    onChangeText={t => setFieldValue('patternPin', t)}
+                    placeholder="Pattern / PIN"
+                  />
+                </View>
+
+                {/* ─── Service / Repair Details ─────────────────────────── */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    Service / Repair Details
+                  </Text>
+
+                  {/* ── Engineer Select with workload badges ── */}
+                  <EngineerSelectModal
+                    engineers={engineers}
+                    workloadMap={workloadMap}
+                    value={values.engineerId}
+                    onSelect={v => setFieldValue('engineerId', v)}
+                  />
+
+                  <Input
+                    label="Dealer Name"
+                    value={values.dealerName}
+                    onChangeText={t => setFieldValue('dealerName', t)}
+                    placeholder="Dealer Name"
+                  />
+
+                  <SelectModal
+                    label="Select Drawer"
+                    value={values.drawerId}
+                    options={drawers}
+                    onSelect={v => setFieldValue('drawerId', v)}
+                    placeholder="Select Drawer"
+                  />
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                      <Input
+                        label="Service Charges"
+                        value={values.serviceCharges}
+                        onChangeText={t => {
+                          const val = onlyNumbers(t);
+                          setFieldValue('serviceCharges', val);
+                          recalculateMargin(
+                            setFieldValue,
+                            val,
+                            values.spareCharges,
+                            values.spareItems,
+                          );
+                        }}
+                        keyboardType="numeric"
+                        placeholder="Service Charges"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Input
+                        label="Spare Charges"
+                        value={values.spareCharges}
+                        onChangeText={t => {
+                          const val = onlyNumbers(t);
+                          setFieldValue('spareCharges', val);
+                          recalculateMargin(
+                            setFieldValue,
+                            values.serviceCharges,
+                            val,
+                            values.spareItems,
+                          );
+                        }}
+                        keyboardType="numeric"
+                        placeholder="Spare Charges"
+                      />
+                    </View>
+                  </View>
+
+                  {/* ── Spare Parts Section with Clickable Trigger ── */}
+                  <View style={{ marginTop: SPACING.md }}>
+                    <Text style={styles.subsectionTitle}>Spare Parts</Text>
+                    
+                    {/* Clickable Spare Charges Trigger */}
+                    <TouchableOpacity 
+                      onPress={() => setSparePopupVisible(true)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.spareChargeTrigger}>
+                        <View style={styles.spareChargeRow}>
+                          <View style={styles.spareChargeLeft}>
+                            <Text style={styles.spareChargeLabel}>Total Spare Charges</Text>
+                            <Text style={styles.spareChargeValue}>
+                              ₹{(values.spareCharges || 0)}
+                            </Text>
+                          </View>
+                          <View style={styles.spareChargeRight}>
+                            <View style={styles.spareChargeBadge}>
+                              <Text style={styles.spareChargeBadgeText}>
+                                {(values.spareItems || []).length} items
+                              </Text>
+                            </View>
+                            <Text style={styles.spareChargeHint}>Tap to manage spare items</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Display items summary if available */}
+                    {(values.spareItems || []).length > 0 && (
+                      <View style={styles.spareItemsPreview}>
+                        <Text style={styles.spareItemsPreviewTitle}>Added Items:</Text>
+                        {(values.spareItems || []).slice(0, 3).map((item, idx) => (
+                          <Text key={idx} style={styles.spareItemsPreviewItem}>
+                            {item.name} × {item.qty} = ₹{(item.qty * item.rate).toFixed(0)}
+                          </Text>
+                        ))}
+                        {(values.spareItems || []).length > 3 && (
+                          <Text style={styles.spareItemsPreviewMore}>
+                            + {values.spareItems.length - 3} more items
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.readOnlyFieldWrapper}>
+                    <Text style={styles.readOnlyLabel}>
+                      Estimate Amount / Time
+                    </Text>
                     <View style={styles.readOnlyBox}>
                       <Text style={styles.readOnlyValue}>
-                        {values.marginAmount
-                          ? `Rs. ${values.marginAmount}`
+                        {values.estimateAmount
+                          ? `Rs. ${values.estimateAmount}`
                           : '—'}
                       </Text>
                     </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <SelectModal
-                      label="Service Rep"
-                      value={values.serviceRepId}
-                      options={salesReps}
-                      onSelect={v => setFieldValue('serviceRepId', v)}
-                      placeholder="Service Rep"
-                    />
+
+                  <Button
+                    title="Calculate Estimate"
+                    onPress={() => calculateEstimate(setFieldValue, () => values)}
+                    variant="secondary"
+                    style={styles.calcButton}
+                    icon={Calculator}
+                  />
+
+                  <SelectModal
+                    label="Payment Mode"
+                    value={values.paymentMode}
+                    options={paymentOptions}
+                    onSelect={v => setFieldValue('paymentMode', v)}
+                    placeholder="Payment Mode"
+                  />
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                      <Input
+                        label="Adv. Amount"
+                        value={values.advanceAmount}
+                        onChangeText={t =>
+                          setFieldValue('advanceAmount', onlyNumbers(t))
+                        }
+                        keyboardType="numeric"
+                        placeholder="Adv. Amount"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fieldLabel}>Adv. Date</Text>
+                      <TouchableOpacity
+                        onPress={() => setOpenAdvanceDate(true)}
+                        style={styles.dateButton}
+                      >
+                        <Calendar size={16} color={COLORS.gray600} />
+                        <Text style={styles.dateText}>
+                          {values.advanceDate
+                            ? new Date(values.advanceDate).toLocaleDateString()
+                            : 'Select Date'}
+                        </Text>
+                      </TouchableOpacity>
+                      <DatePicker
+                        modal
+                        open={openAdvanceDate}
+                        date={values.advanceDate || new Date()}
+                        onConfirm={date => {
+                          setOpenAdvanceDate(false);
+                          setFieldValue('advanceDate', date);
+                        }}
+                        onCancel={() => setOpenAdvanceDate(false)}
+                      />
+                    </View>
                   </View>
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                      <Text style={styles.readOnlyLabel}>Margin</Text>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyValue}>
+                          {values.marginAmount
+                            ? `Rs. ${values.marginAmount}`
+                            : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <SelectModal
+                        label="Service Rep"
+                        value={values.serviceRepId}
+                        options={salesReps}
+                        onSelect={v => setFieldValue('serviceRepId', v)}
+                        placeholder="Service Rep"
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Repair Date</Text>
+                  <TouchableOpacity
+                    onPress={() => setOpenRepairDate(true)}
+                    style={styles.dateButton}
+                  >
+                    <Calendar size={20} color={COLORS.gray600} />
+                    <Text style={styles.dateText}>
+                      {values.repairDate?.toLocaleDateString()}
+                    </Text>
+                  </TouchableOpacity>
+                  <DatePicker
+                    modal
+                    open={openRepairDate}
+                    date={values.repairDate || new Date()}
+                    onConfirm={date => {
+                      setOpenRepairDate(false);
+                      setFieldValue('repairDate', date);
+                    }}
+                    onCancel={() => setOpenRepairDate(false)}
+                  />
+
+                  <Text style={styles.fieldLabel}>Delivery Date</Text>
+                  <TouchableOpacity
+                    onPress={() => setOpenDeliveryDate(true)}
+                    style={styles.dateButton}
+                  >
+                    <Calendar size={20} color={COLORS.gray600} />
+                    <Text style={styles.dateText}>
+                      {values.deliveryDate
+                        ? values.deliveryDate.toLocaleDateString()
+                        : 'Select Date'}
+                    </Text>
+                  </TouchableOpacity>
+                  <DatePicker
+                    modal
+                    open={openDeliveryDate}
+                    date={values.deliveryDate || new Date()}
+                    onConfirm={date => {
+                      setOpenDeliveryDate(false);
+                      setFieldValue('deliveryDate', date);
+                    }}
+                    onCancel={() => setOpenDeliveryDate(false)}
+                  />
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                      <SelectModal
+                        label="Insta Follow"
+                        value={values.instaFollowers}
+                        options={instaFollowOptions}
+                        onSelect={v => setFieldValue('instaFollowers', v)}
+                        placeholder="Select"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <SelectModal
+                        label="Google Review"
+                        value={values.googleReview}
+                        options={googleReviewOptions}
+                        onSelect={v => setFieldValue('googleReview', v)}
+                        placeholder="Select"
+                      />
+                    </View>
+                  </View>
+
+                  <Input
+                    label="Remarks"
+                    value={values.remarks}
+                    onChangeText={t => setFieldValue('remarks', t)}
+                    multiline
+                    placeholder="Remarks"
+                  />
                 </View>
 
-                <Text style={styles.fieldLabel}>Repair Date</Text>
-                <TouchableOpacity
-                  onPress={() => setOpenRepairDate(true)}
-                  style={styles.dateButton}
-                >
-                  <Calendar size={20} color={COLORS.gray600} />
-                  <Text style={styles.dateText}>
-                    {values.repairDate?.toLocaleDateString()}
-                  </Text>
-                </TouchableOpacity>
-                <DatePicker
-                  modal
-                  open={openRepairDate}
-                  date={values.repairDate || new Date()}
-                  onConfirm={date => {
-                    setOpenRepairDate(false);
-                    setFieldValue('repairDate', date);
-                  }}
-                  onCancel={() => setOpenRepairDate(false)}
+                {/* ─── Visual Inspection ────────────────────────────────── */}
+                <VisualInspectionSection
+                  visualIssues={visualIssues}
+                  setVisualIssues={setVisualIssues}
+                  faultList={faults}
+                  customFaults={customFaults}
+                  setCustomFaults={setCustomFaults}
                 />
 
-                <Text style={styles.fieldLabel}>Delivery Date</Text>
-                <TouchableOpacity
-                  onPress={() => setOpenDeliveryDate(true)}
-                  style={styles.dateButton}
-                >
-                  <Calendar size={20} color={COLORS.gray600} />
-                  <Text style={styles.dateText}>
-                    {values.deliveryDate
-                      ? values.deliveryDate.toLocaleDateString()
-                      : 'Select Date'}
-                  </Text>
-                </TouchableOpacity>
-                <DatePicker
-                  modal
-                  open={openDeliveryDate}
-                  date={values.deliveryDate || new Date()}
-                  onConfirm={date => {
-                    setOpenDeliveryDate(false);
-                    setFieldValue('deliveryDate', date);
-                  }}
-                  onCancel={() => setOpenDeliveryDate(false)}
-                />
-
-                <View style={styles.row}>
-                  <View style={{ flex: 1, marginRight: SPACING.sm }}>
-                    <SelectModal
-                      label="Insta Follow"
-                      value={values.instaFollowers}
-                      options={instaFollowOptions}
-                      onSelect={v => setFieldValue('instaFollowers', v)}
-                      placeholder="Select"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <SelectModal
-                      label="Google Review"
-                      value={values.googleReview}
-                      options={googleReviewOptions}
-                      onSelect={v => setFieldValue('googleReview', v)}
-                      placeholder="Select"
-                    />
-                  </View>
-                </View>
-
-                <Input
-                  label="Remarks"
-                  value={values.remarks}
-                  onChangeText={t => setFieldValue('remarks', t)}
-                  multiline
-                  placeholder="Remarks"
-                />
-              </View>
-
-              {/* ─── Visual Inspection ────────────────────────────────── */}
-              <VisualInspectionSection
-                visualIssues={visualIssues}
-                setVisualIssues={setVisualIssues}
-                faultList={faults}
-                customFaults={customFaults}
-                setCustomFaults={setCustomFaults}
-              />
-
-              {/* ─── Action Buttons ───────────────────────────────────── */}
-              <View style={styles.actionContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.saveButtonPrimary,
-                    buttonsDisabled && { opacity: 0.6 },
-                  ]}
-                  onPress={handleSubmit}
-                  disabled={buttonsDisabled}
-                  activeOpacity={0.8}
-                >
-                  <Save size={22} color={COLORS.white} />
-                  <Text style={styles.saveButtonText}>
-                    {buttonsDisabled
-                      ? 'Saving...'
-                      : mode === 'edit'
-                      ? 'Update Job Sheet'
-                      : 'Save Job Sheet'}
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.secondaryActions}>
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() =>
-                      navigation.replace('JobSheetForm', { mode, jobId })
-                    }
-                    disabled={buttonsDisabled}
-                  >
-                    <RefreshCw size={20} color={COLORS.gray700} />
-                    <Text style={styles.secondaryButtonText}>Refresh</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() =>
-                      calculateEstimate(setFieldValue, () => values)
-                    }
-                    disabled={buttonsDisabled}
-                  >
-                    <Calculator size={20} color={COLORS.gray700} />
-                    <Text style={styles.secondaryButtonText}>Calculate</Text>
-                  </TouchableOpacity>
-
+                {/* ─── Action Buttons ───────────────────────────────────── */}
+                <View style={styles.actionContainer}>
                   <TouchableOpacity
                     style={[
-                      styles.secondaryButton,
-                      styles.estimateBtn,
+                      styles.saveButtonPrimary,
                       buttonsDisabled && { opacity: 0.6 },
                     ]}
-                    onPress={() => requestEstimate(values)}
+                    onPress={handleSubmit}
                     disabled={buttonsDisabled}
+                    activeOpacity={0.8}
                   >
-                    <FileText size={20} color="#F59E0B" />
-                    <Text
-                      style={[styles.secondaryButtonText, { color: '#F59E0B' }]}
-                    >
-                      Estimate
+                    <Save size={22} color={COLORS.white} />
+                    <Text style={styles.saveButtonText}>
+                      {buttonsDisabled
+                        ? 'Saving...'
+                        : mode === 'edit'
+                        ? 'Update Job Sheet'
+                        : 'Save Job Sheet'}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.secondaryButton,
-                      styles.invoiceBtn,
-                      buttonsDisabled && { opacity: 0.6 },
-                    ]}
-                    onPress={() => requestInvoice(values)}
-                    disabled={buttonsDisabled}
-                  >
-                    <Receipt size={20} color={COLORS.primary} />
-                    <Text
+                  <View style={styles.secondaryActions}>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() =>
+                        navigation.replace('JobSheetForm', { mode, jobId })
+                      }
+                      disabled={buttonsDisabled}
+                    >
+                      <RefreshCw size={20} color={COLORS.gray700} />
+                      <Text style={styles.secondaryButtonText}>Refresh</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() =>
+                        calculateEstimate(setFieldValue, () => values)
+                      }
+                      disabled={buttonsDisabled}
+                    >
+                      <Calculator size={20} color={COLORS.gray700} />
+                      <Text style={styles.secondaryButtonText}>Calculate</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       style={[
-                        styles.secondaryButtonText,
-                        { color: COLORS.primary },
+                        styles.secondaryButton,
+                        styles.estimateBtn,
+                        buttonsDisabled && { opacity: 0.6 },
                       ]}
+                      onPress={() => requestEstimate(values)}
+                      disabled={buttonsDisabled}
                     >
-                      Invoice
-                    </Text>
-                  </TouchableOpacity>
+                      <FileText size={20} color="#F59E0B" />
+                      <Text
+                        style={[styles.secondaryButtonText, { color: '#F59E0B' }]}
+                      >
+                        Estimate
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() => navigation.navigate('Home')}
-                    disabled={buttonsDisabled}
-                  >
-                    <Home size={20} color={COLORS.gray700} />
-                    <Text style={styles.secondaryButtonText}>Home</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.secondaryButton,
+                        styles.invoiceBtn,
+                        buttonsDisabled && { opacity: 0.6 },
+                      ]}
+                      onPress={() => requestInvoice(values)}
+                      disabled={buttonsDisabled}
+                    >
+                      <Receipt size={20} color={COLORS.primary} />
+                      <Text
+                        style={[
+                          styles.secondaryButtonText,
+                          { color: COLORS.primary },
+                        ]}
+                      >
+                        Invoice
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() => navigation.navigate('Home')}
+                      disabled={buttonsDisabled}
+                    >
+                      <Home size={20} color={COLORS.gray700} />
+                      <Text style={styles.secondaryButtonText}>Home</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
+
+              {/* ─── Spare Popup (INSIDE Formik render) ──────────────────── */}
+              <SparePopup
+                visible={sparePopupVisible}
+                onClose={() => setSparePopupVisible(false)}
+                setSpareCharge={(charge) => {
+                  setFieldValue('spareCharges', charge);
+                  const service = parseFloat(values.serviceCharges) || 0;
+                  const spare = parseFloat(charge) || 0;
+                  const itemsTotal = (values.spareItems || []).reduce(
+                    (sum, item) =>
+                      sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
+                    0,
+                  );
+                  const estimate = service + spare + itemsTotal;
+                  setFieldValue('estimateAmount', estimate.toString());
+                  setFieldValue('marginAmount', (estimate - spare).toString());
+                }}
+                setSpareItems={(items) => {
+                  setFieldValue('spareItems', items);
+                  const service = parseFloat(values.serviceCharges) || 0;
+                  const spare = parseFloat(values.spareCharges) || 0;
+                  const itemsTotal = (items || []).reduce(
+                    (sum, item) =>
+                      sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
+                    0,
+                  );
+                  const estimate = service + spare + itemsTotal;
+                  setFieldValue('estimateAmount', estimate.toString());
+                  setFieldValue('marginAmount', (estimate - spare).toString());
+                }}
+                existingItems={values.spareItems || []}
+              />
+            </>
           );
         }}
       </Formik>
@@ -2354,58 +2367,79 @@ const styles = StyleSheet.create({
   calcButton: {
     marginBottom: SPACING.md,
   },
-  spareItemCard: {
+  // Spare Charge Trigger Styles
+  spareChargeTrigger: {
     backgroundColor: COLORS.gray50,
     borderRadius: BORDERS.radius.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  spareItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  spareInputName: {
-    flex: 3,
+    padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.gray200,
-    borderRadius: BORDERS.radius.sm,
-    padding: SPACING.sm,
-    marginRight: SPACING.sm,
-    ...FONTS.regular,
-    fontSize: 14,
-    backgroundColor: COLORS.white,
+    marginBottom: SPACING.md,
   },
-  spareInputSmall: {
+  spareChargeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  spareChargeLeft: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
+  },
+  spareChargeLabel: {
+    ...FONTS.medium,
+    fontSize: 12,
+    color: COLORS.gray500,
+    marginBottom: SPACING.xs,
+  },
+  spareChargeValue: {
+    ...FONTS.bold,
+    fontSize: 18,
+    color: COLORS.gray900,
+  },
+  spareChargeRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  spareChargeBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  spareChargeBadgeText: {
+    ...FONTS.medium,
+    fontSize: 11,
+    color: COLORS.primary,
+  },
+  spareChargeHint: {
+    ...FONTS.regular,
+    fontSize: 11,
+    color: COLORS.gray400,
+  },
+  spareItemsPreview: {
+    backgroundColor: COLORS.white,
     borderRadius: BORDERS.radius.sm,
     padding: SPACING.sm,
-    marginRight: SPACING.sm,
-    ...FONTS.regular,
-    fontSize: 14,
-    backgroundColor: COLORS.white,
-    textAlign: 'center',
-  },
-  removeButton: {
-    padding: SPACING.sm,
-  },
-  addSpareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: BORDERS.radius.md,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.xs,
-    backgroundColor: COLORS.primaryLight,
-    gap: 6,
+    borderColor: COLORS.gray100,
   },
-  addSpareText: {
+  spareItemsPreviewTitle: {
     ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.primary,
+    fontSize: 12,
+    color: COLORS.gray600,
+    marginBottom: 4,
+  },
+  spareItemsPreviewItem: {
+    ...FONTS.regular,
+    fontSize: 12,
+    color: COLORS.gray700,
+    paddingVertical: 2,
+  },
+  spareItemsPreviewMore: {
+    ...FONTS.medium,
+    fontSize: 11,
+    color: COLORS.gray400,
+    marginTop: 2,
   },
   visualRow: {
     flexDirection: 'row',

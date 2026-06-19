@@ -22,6 +22,7 @@ import {
   Edit2,
   Users,
   FileText,
+  BarChart2,
 } from 'lucide-react-native';
 import {
   fetchMakes,
@@ -455,7 +456,7 @@ export default function AdminScreens() {
 
   return (
     <View style={styles.container}>
-      {isAdmin && (
+      {/* {isAdmin && (
         <View style={styles.adminHeader}>
           <TouchableOpacity
             style={styles.adminNavButton}
@@ -470,6 +471,32 @@ export default function AdminScreens() {
           >
             <FileText size={20} color={COLORS.white} />
             <Text style={styles.adminNavText}>User Report</Text>
+          </TouchableOpacity>
+        </View>
+      )} */}
+
+      {isAdmin && (
+        <View style={styles.adminHeader}>
+          <TouchableOpacity
+            style={styles.adminNavButton}
+            onPress={() => navigation.navigate('UserList')}
+          >
+            <Users size={20} color={COLORS.white} />
+            <Text style={styles.adminNavText}>User List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.adminNavButton, { backgroundColor: '#059669' }]}
+            onPress={() => navigation.navigate('UserReport')}
+          >
+            <FileText size={20} color={COLORS.white} />
+            <Text style={styles.adminNavText}>User Report</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.adminNavButton, { backgroundColor: '#7c3aed' }]}
+            onPress={() => navigation.navigate('SalesRepReport')}
+          >
+            <BarChart2 size={20} color={COLORS.white} />
+            <Text style={styles.adminNavText}>Sales Report</Text>
           </TouchableOpacity>
         </View>
       )}
