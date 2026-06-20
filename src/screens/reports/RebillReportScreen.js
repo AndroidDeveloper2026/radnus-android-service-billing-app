@@ -11,9 +11,11 @@ import {
   Alert,
   RefreshControl,
   FlatList,
+  StatusBar,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DatePicker from 'react-native-date-picker';
 import RNFS from 'react-native-fs';
 import XLSX from 'xlsx';
@@ -150,6 +152,7 @@ const RebillHistoryItem = ({ item, index, isCurrent, status }) => {
 const RebillReportScreen = () => {
   const dispatch = useDispatch();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   
   const { rebillReport = [], loading = false } = useSelector(
     state => state.reports || {}
@@ -393,7 +396,9 @@ const RebillReportScreen = () => {
   }, [expandedJobId, toggleExpand, renderExpandedContent]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color="#1e293b" />
@@ -568,7 +573,10 @@ const RebillReportScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f8fafc',
+  },
   mainScrollView: { flex: 1 },
   contentContainer: { paddingBottom: 20 },
   

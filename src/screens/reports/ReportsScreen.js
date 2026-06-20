@@ -19,7 +19,6 @@ import {
   Dimensions,
   Platform,
   FlatList,
-  Modal,
   SafeAreaView,
   StatusBar,
 } from 'react-native';
@@ -52,7 +51,6 @@ import {
   Receipt,
   AlertCircle,
   ChevronRight,
-  Printer,
 } from 'lucide-react-native';
 import {
   fetchEngineerWiseReport,
@@ -97,33 +95,42 @@ const COLORS = {
   infotwo: '#cbddfc',
 };
 
-// Helper Functions
-const formatDate = value => {
+// Helper Functions - FIXED Date Format
+const formatDate = (value) => {
   if (!value) return '-';
   try {
     const d = new Date(value);
     if (!isNaN(d.getTime())) {
-      return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
   } catch (e) {}
   return '-';
 };
 
-const formatDateDisplay = value => {
+const formatDateDisplay = (value) => {
   if (!value || value === '-') return '-';
   try {
     const parts = value.split('/');
     if (parts.length === 3) {
       const d = new Date(parts[2], parts[1] - 1, parts[0]);
       if (!isNaN(d.getTime())) {
-        return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       }
     }
   } catch (e) {}
   return value;
 };
 
-const safeNum = val => {
+const formatDateInput = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (!isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  return '';
+};
+
+const safeNum = (val) => {
   const n = Number(val);
   return isNaN(n) ? 0 : n;
 };
@@ -134,13 +141,13 @@ const safeStr = (val, fallback = '-') => {
   return s || fallback;
 };
 
-const formatCurrency = amount => {
+const formatCurrency = (amount) => {
   const num = safeNum(amount);
   return `₹${num.toLocaleString('en-IN')}`;
 };
 
 // Status Color Mapping
-const getStatusColors = status => {
+const getStatusColors = (status) => {
   const map = {
     received: { bg: '#E1F5EE', text: '#0F6E56' },
     pending: { bg: '#FAEEDA', text: '#854F0B' },
@@ -160,7 +167,7 @@ const REPORT_TABS = [
   { id: 'value', name: 'Value', Icon: DollarSign },
   { id: 'spare', name: 'Spare', Icon: Box },
   { id: 'dealer', name: 'Dealer', Icon: Store },
-  { id: 'dailyReceived', name: 'Rcvd', Icon: Inbox },
+  { id: 'received', name: 'Rcvd', Icon: Inbox },
   { id: 'dailyDelivered', name: 'Del', Icon: Send },
   { id: 'dailyRepaired', name: 'Rep', Icon: Hammer },
   { id: 'repairPending', name: 'R Pend', Icon: Clock },
@@ -169,16 +176,7 @@ const REPORT_TABS = [
   { id: 'rebill', name: 'Rebill', Icon: Receipt },
 ];
 
-const STATUS_OPTIONS = [
-  'All',
-  'Received',
-  'Pending',
-  'Repairing',
-  'Repaired',
-  'Delivered',
-  'Delivered NR/NA',
-  'Cancelled',
-];
+const STATUS_OPTIONS = ['All', 'Received', 'Pending', 'Repaired', 'Delivered', 'Delivered NR/NA', 'Cancelled'];
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
@@ -340,6 +338,10 @@ const TableRow = React.memo(
               item.service?.spareCharge || item.spareCharges,
             );
             value = formatCurrency(service + spare);
+          } else if (column.key === 'date') {
+            value = item.date || '-';
+          } else if (column.key === 'count') {
+            value = item.count || 0;
           } else {
             value =
               item[column.key] !== undefined && item[column.key] !== null
@@ -381,7 +383,7 @@ const TableRow = React.memo(
 
 // Optimized Table Component
 const OptimizedTable = React.memo(
-  ({ columns, data, onPress, grandTotal, totalLabel = 'Grand Total' }) => {
+  ({ columns, data, onPress, grandTotal, totalLabel = 'Grand Total', showTotal = true }) => {
     const totalWidth = useMemo(
       () => columns.reduce((sum, col) => sum + (col.width || 100), 0),
       [columns],
@@ -456,11 +458,11 @@ const OptimizedTable = React.memo(
             />
 
             {/* Grand Total */}
-            {grandTotal !== undefined && grandTotal !== null && (
+            {showTotal && grandTotal !== undefined && grandTotal !== null && (
               <View style={styles.grandTotalRow}>
                 <Text style={styles.grandTotalLabel}>{totalLabel}</Text>
                 <Text style={styles.grandTotalValue}>
-                  {formatCurrency(grandTotal)}
+                  {typeof grandTotal === 'number' ? grandTotal : formatCurrency(grandTotal)}
                 </Text>
               </View>
             )}
@@ -508,13 +510,12 @@ const ReportsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
 
   const cacheRef = useRef({});
   const tabChangeTimeout = useRef(null);
   const mainScrollViewRef = useRef(null);
 
-  // Memoized Stats
+  // Memoized Stats - FIXED to use device.mobileStatus
   const countStats = useMemo(() => {
     const allJobs = list;
     return {
@@ -565,7 +566,7 @@ const ReportsScreen = () => {
 
   // ─── Column Definitions ───────────────────────────────────────────────────
 
-  // All Reports Columns - Complete with all web columns
+  // All Reports Columns
   const allReportsColumns = useMemo(
     () => [
       { label: '#', key: 'index', width: 35 },
@@ -721,7 +722,7 @@ const ReportsScreen = () => {
     [],
   );
 
-  // Engineer Report Columns - Match Web Exactly
+  // Engineer Report Columns
   const engineerColumns = useMemo(
     () => [
       { label: 'SL No', key: 'index', width: 45 },
@@ -751,21 +752,20 @@ const ReportsScreen = () => {
     [],
   );
 
-  // Value Report Columns
+  // Value Report Columns - Exactly matching the image
   const valueColumns = useMemo(
     () => [
       { label: 'Job No', key: 'jobNo', width: 90, bold: true },
       { label: 'Name', key: 'name', width: 110 },
-      { label: 'Engineer', key: 'engineer', width: 90 },
-      { label: 'Received', key: 'received', width: 75 },
-      { label: 'Repaired', key: 'repaired', width: 75 },
-      { label: 'Delivered', key: 'delivered', width: 75 },
-      { label: 'Service', key: 'service', width: 75, color: COLORS.purple },
-      { label: 'Spare', key: 'spare', width: 75, color: COLORS.pink },
+      { label: 'Recd', key: 'received', width: 85 },
+      { label: 'Repd', key: 'repaired', width: 85 },
+      { label: 'Deld', key: 'delivered', width: 85 },
+      { label: 'Service', key: 'service', width: 85, color: COLORS.purple },
+      { label: 'Spare', key: 'spare', width: 85, color: COLORS.pink },
       {
         label: 'Total',
         key: 'total',
-        width: 80,
+        width: 85,
         bold: true,
         color: COLORS.success,
       },
@@ -811,14 +811,14 @@ const ReportsScreen = () => {
     [],
   );
 
-  // Daily Summary Columns
-  const dailyColumns = useMemo(
+  // Received Report Columns - Matching the image exactly
+  const receivedColumns = useMemo(
     () => [
       { label: 'Date', key: 'date', width: 120, bold: true },
       {
-        label: 'Count',
+        label: 'Received Count',
         key: 'count',
-        width: 80,
+        width: 120,
         bold: true,
         color: COLORS.primary,
       },
@@ -826,33 +826,77 @@ const ReportsScreen = () => {
     [],
   );
 
-  // Pending Report Columns
+  // Daily Delivered Columns
+  const deliveredColumns = useMemo(
+    () => [
+      { label: 'Date', key: 'date', width: 120, bold: true },
+      {
+        label: 'Delivered Count',
+        key: 'count',
+        width: 120,
+        bold: true,
+        color: COLORS.success,
+      },
+    ],
+    [],
+  );
+
+  // Daily Repaired Columns
+  const repairedColumns = useMemo(
+    () => [
+      { label: 'Date', key: 'date', width: 120, bold: true },
+      {
+        label: 'Repaired Count',
+        key: 'count',
+        width: 120,
+        bold: true,
+        color: COLORS.purple,
+      },
+    ],
+    [],
+  );
+
+  // Pending Report Columns - Matching the image exactly
   const pendingColumns = useMemo(
     () => [
-      { label: '#', key: 'index', width: 35 },
-      { label: 'Job No', key: 'jobSheetNo', width: 85, bold: true },
+      { label: 'Job No', key: 'jobSheetNo', width: 90, bold: true },
       { label: 'Customer', key: 'customerName', width: 110 },
       {
         label: 'Make',
         key: 'make',
-        width: 70,
+        width: 90,
         render: item => item.device?.make || '-',
       },
       {
         label: 'Model',
         key: 'model',
-        width: 80,
+        width: 100,
         render: item => item.device?.model || '-',
       },
-      { label: 'Phone', key: 'contact', width: 85 },
-      { label: 'Date', key: 'createdAt', width: 70 },
+      { label: 'Phone', key: 'contact', width: 100 },
+      { label: 'Date', key: 'createdAt', width: 90 },
       {
         label: 'Fault',
         key: 'fault',
-        width: 100,
+        width: 80,
         render: item => item.visualIssues?.join(', ') || '-',
       },
-      { label: 'Status', key: 'status', width: 75 },
+      { label: 'Status', key: 'status', width: 90 },
+    ],
+    [],
+  );
+
+  // NR/NA Columns
+  const nrnaColumns = useMemo(
+    () => [
+      { label: 'Date', key: 'date', width: 120, bold: true },
+      {
+        label: 'NR/NA Count',
+        key: 'count',
+        width: 120,
+        bold: true,
+        color: COLORS.error,
+      },
     ],
     [],
   );
@@ -933,8 +977,10 @@ const ReportsScreen = () => {
 
       cacheRef.current[cacheKey] = { timestamp: Date.now() };
 
-      const filterParams = { fromDate: fd, toDate: td };
-      if (sf && sf !== 'All') filterParams.status = sf;
+      const filterParams = {};
+      if (fd) filterParams.fromDate = fd;
+      if (td) filterParams.toDate = td;
+      if (sf && sf !== 'All' && sf !== 'All Status') filterParams.status = sf;
 
       switch (tabId) {
         case 'engineer':
@@ -955,7 +1001,7 @@ const ReportsScreen = () => {
         case 'all':
           dispatch(fetchJobs(filterParams));
           break;
-        case 'dailyReceived':
+        case 'received':
           dispatch(fetchDailySummary({ ...filterParams, type: 'received' }));
           break;
         case 'dailyDelivered':
@@ -1110,7 +1156,6 @@ const ReportsScreen = () => {
         headers = [
           'Job No',
           'Name',
-          'Engineer',
           'Received',
           'Repaired',
           'Delivered',
@@ -1136,6 +1181,41 @@ const ReportsScreen = () => {
           'Engineer',
           'Status',
         ];
+        break;
+      case 'received':
+        exportData = dailySummary;
+        filename = 'Received_Report';
+        headers = ['Date', 'Received Count'];
+        break;
+      case 'dailyDelivered':
+        exportData = dailySummary;
+        filename = 'Delivered_Report';
+        headers = ['Date', 'Delivered Count'];
+        break;
+      case 'dailyRepaired':
+        exportData = dailySummary;
+        filename = 'Repaired_Report';
+        headers = ['Date', 'Repaired Count'];
+        break;
+      case 'repairPending':
+      case 'deliveryPending':
+        exportData = pendingReport;
+        filename = activeTab === 'repairPending' ? 'Repair_Pending_Report' : 'Delivery_Pending_Report';
+        headers = [
+          'Job No',
+          'Customer',
+          'Make',
+          'Model',
+          'Phone',
+          'Date',
+          'Fault',
+          'Status',
+        ];
+        break;
+      case 'deliveredNRNA':
+        exportData = deliveredNRNA;
+        filename = 'NR_NA_Report';
+        headers = ['Date', 'NR/NA Count'];
         break;
       case 'rebill':
         exportData = rebillReport;
@@ -1173,7 +1253,7 @@ const ReportsScreen = () => {
               row[h] = idx + 1;
               break;
             case 'Date':
-              row[h] = formatDate(item.createdAt || item.savedDate);
+              row[h] = formatDate(item.createdAt || item.savedDate || item.date);
               break;
             case 'Job No':
               row[h] = item.jobSheetNo || item.jobNo || '-';
@@ -1253,6 +1333,24 @@ const ReportsScreen = () => {
               const currTotal = safeNum(item.service?.serviceCharge) + safeNum(item.service?.spareCharge);
               row[h] = histTotal + currTotal;
               break;
+            case 'Received Count':
+              row[h] = safeNum(item.count);
+              break;
+            case 'Delivered Count':
+              row[h] = safeNum(item.count);
+              break;
+            case 'Repaired Count':
+              row[h] = safeNum(item.count);
+              break;
+            case 'NR/NA Count':
+              row[h] = safeNum(item.count);
+              break;
+            case 'Phone':
+              row[h] = item.customer?.contact || item.contact || '-';
+              break;
+            case 'Fault':
+              row[h] = item.visualIssues?.join(', ') || '-';
+              break;
             default:
               row[h] = '-';
           }
@@ -1261,8 +1359,6 @@ const ReportsScreen = () => {
       });
 
       const ws = XLSX.utils.json_to_sheet(rows);
-
-      // Set column widths
       const colWidths = headers.map(() => ({ wch: 15 }));
       ws['!cols'] = colWidths;
 
@@ -1301,6 +1397,9 @@ const ReportsScreen = () => {
     engineerReport,
     noEngineerJobs,
     rebillReport,
+    dailySummary,
+    pendingReport,
+    deliveredNRNA,
   ]);
 
   // ─── Computed Data ──────────────────────────────────────────────────────
@@ -1321,9 +1420,26 @@ const ReportsScreen = () => {
     [valueReport],
   );
 
+  const valueReportSubtotals = useMemo(() => {
+    const service = valueReport.reduce((sum, item) => sum + safeNum(item.service), 0);
+    const spare = valueReport.reduce((sum, item) => sum + safeNum(item.spare), 0);
+    const total = valueReport.reduce((sum, item) => sum + safeNum(item.total), 0);
+    return { service, spare, total };
+  }, [valueReport]);
+
   const spareReportTotal = useMemo(
     () => spareReport.reduce((sum, item) => sum + safeNum(item.amount), 0),
     [spareReport],
+  );
+
+  const dailyTotal = useMemo(
+    () => dailySummary.reduce((sum, item) => sum + safeNum(item.count), 0),
+    [dailySummary],
+  );
+
+  const nrnaTotal = useMemo(
+    () => deliveredNRNA.reduce((sum, item) => sum + safeNum(item.count), 0),
+    [deliveredNRNA],
   );
 
   // ─── Rebill Summary Stats ───────────────────────────────────────────────
@@ -1354,13 +1470,245 @@ const ReportsScreen = () => {
     };
   }, [rebillReport]);
 
-  // ─── Engineer Grouped Report Renderer ──────────────────────────────────
+  // ─── Render Value Report with Sub Total ────────────────────────────────
+
+  const renderValueReport = useCallback(() => {
+    if (!valueReport.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <DollarSign size={40} color={COLORS.gray300} />
+          <Text style={styles.emptyText}>No data found</Text>
+          <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+        </View>
+      );
+    }
+
+    const totalWidth = valueColumns.reduce((sum, col) => sum + (col.width || 100), 0);
+
+    return (
+      <View style={styles.tableWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          <View style={{ width: totalWidth, minWidth: SCREEN_WIDTH - 20 }}>
+            {/* Header */}
+            <View style={[styles.tableRow, styles.headerRow]}>
+              {valueColumns.map((column, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.tableHeaderCellContainer,
+                    { width: column.width || 100 },
+                  ]}
+                >
+                  <Text style={styles.tableHeaderCell} numberOfLines={1}>
+                    {column.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Body */}
+            <FlatList
+              data={valueReport}
+              renderItem={({ item, index }) => (
+                <TableRow
+                  item={item}
+                  index={index}
+                  columns={valueColumns}
+                  onPress={navigateToJobDetail}
+                  isEven={index % 2 === 0}
+                />
+              )}
+              keyExtractor={(item, index) => item._id || item.id || `row_${index}`}
+              initialNumToRender={15}
+              maxToRenderPerBatch={15}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
+              showsVerticalScrollIndicator={true}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
+              style={{ maxHeight: 400 }}
+            />
+
+            {/* Sub Total Row - Matching web exactly */}
+            <View style={styles.subTotalContainer}>
+              <View style={styles.subTotalRow}>
+                <Text style={styles.subTotalLabel}>Sub Total</Text>
+                <View style={styles.subTotalValues}>
+                  <Text style={styles.subTotalValue}>
+                    {formatCurrency(valueReportSubtotals.service)}
+                  </Text>
+                  <Text style={styles.subTotalValue}>
+                    {formatCurrency(valueReportSubtotals.spare)}
+                  </Text>
+                  <Text style={[styles.subTotalValue, styles.subTotalBold]}>
+                    {formatCurrency(valueReportSubtotals.total)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Grand Total */}
+            <View style={styles.grandTotalRow}>
+              <Text style={styles.grandTotalLabel}>Grand Total</Text>
+              <Text style={styles.grandTotalValue}>
+                {formatCurrency(valueReportTotal)}
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }, [valueReport, valueColumns, valueReportSubtotals, valueReportTotal, navigateToJobDetail]);
+
+  // ─── Render Received Report ─────────────────────────────────────────────
+
+  const renderReceivedReport = useCallback(() => {
+    if (!dailySummary.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Inbox size={40} color={COLORS.gray300} />
+          <Text style={styles.emptyText}>No data found</Text>
+          <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.reportHeaderContainer}>
+          <Text style={styles.reportHeaderTitle}>service.radnus.in/received-report</Text>
+          <View style={styles.totalDaysContainer}>
+            <Text style={styles.totalDaysLabel}>Total Days: {dailySummary.length}</Text>
+          </View>
+        </View>
+        <OptimizedTable
+          columns={receivedColumns}
+          data={dailySummary}
+          grandTotal={dailyTotal}
+          totalLabel="Total"
+        />
+      </View>
+    );
+  }, [dailySummary, receivedColumns, dailyTotal]);
+
+  // ─── Render NR/NA Report ────────────────────────────────────────────────
+
+  const renderNRNAReport = useCallback(() => {
+    if (!deliveredNRNA.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <AlertTriangle size={40} color={COLORS.gray300} />
+          <Text style={styles.emptyText}>No data found</Text>
+          <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.reportHeaderContainer}>
+          <Text style={styles.reportHeaderTitle}>Daily Delivered NR/NA Report</Text>
+          <Text style={styles.reportHeaderSubtitle}>Daily NR/NA delivered device summary</Text>
+          <View style={styles.totalDaysContainer}>
+            <Text style={styles.totalDaysLabel}>Total Days: {deliveredNRNA.length}</Text>
+          </View>
+        </View>
+        <OptimizedTable
+          columns={nrnaColumns}
+          data={deliveredNRNA}
+          grandTotal={nrnaTotal}
+          totalLabel="Total NR/NA"
+        />
+        <View style={styles.totalTextContainer}>
+          <Text style={styles.totalText}>
+            Total NR/NA: <Text style={styles.totalTextBold}>{nrnaTotal}</Text>
+          </Text>
+        </View>
+      </View>
+    );
+  }, [deliveredNRNA, nrnaColumns, nrnaTotal]);
+
+  // ─── Render Daily Reports ───────────────────────────────────────────────
+
+  const renderDailyReport = useCallback((type) => {
+    if (!dailySummary.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ClipboardList size={40} color={COLORS.gray300} />
+          <Text style={styles.emptyText}>No data found</Text>
+          <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+        </View>
+      );
+    }
+
+    const columns = type === 'delivered' ? deliveredColumns : repairedColumns;
+    const label = type === 'delivered' ? 'Delivered' : 'Repaired';
+
+    return (
+      <View>
+        <View style={styles.reportHeaderContainer}>
+          <Text style={styles.reportHeaderTitle}>Daily {label} Report</Text>
+          <Text style={styles.reportHeaderSubtitle}>Daily {label.toLowerCase()} device summary</Text>
+          <View style={styles.totalDaysContainer}>
+            <Text style={styles.totalDaysLabel}>Total Days: {dailySummary.length}</Text>
+          </View>
+        </View>
+        <OptimizedTable
+          columns={columns}
+          data={dailySummary}
+          grandTotal={dailyTotal}
+          totalLabel="Total"
+        />
+      </View>
+    );
+  }, [dailySummary, deliveredColumns, repairedColumns, dailyTotal]);
+
+  // ─── Render Pending Report ──────────────────────────────────────────────
+
+  const renderPendingReport = useCallback((type) => {
+    if (!pendingReport.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Clock size={40} color={COLORS.gray300} />
+          <Text style={styles.emptyText}>No data found</Text>
+          <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+        </View>
+      );
+    }
+
+    const title = type === 'repairPending' ? 'Repair Pending Report' : 'Delivery Pending Report';
+    const subtitle = type === 'repairPending' 
+      ? 'Track all pending & received repair devices' 
+      : 'Track all repaired devices pending delivery';
+
+    return (
+      <View>
+        <View style={styles.reportHeaderContainer}>
+          <Text style={styles.reportHeaderTitle}>{title}</Text>
+          <Text style={styles.reportHeaderSubtitle}>{subtitle}</Text>
+          <View style={styles.totalRecordsContainer}>
+            <Text style={styles.totalRecordsLabel}>Total Records: {pendingReport.length}</Text>
+          </View>
+        </View>
+        <OptimizedTable
+          columns={pendingColumns}
+          data={pendingReport}
+          onPress={navigateToJobDetail}
+          showTotal={false}
+        />
+      </View>
+    );
+  }, [pendingReport, pendingColumns, navigateToJobDetail]);
+
+  // ─── Render Engineer Grouped Report ────────────────────────────────────
 
   const renderEngineerGroupedReport = useCallback(() => {
-    // Build grouped data structure
     const groups = [];
 
-    // Add jobs without engineer
     if (noEngineerJobs?.length) {
       groups.push({
         engineer: 'No Engineer',
@@ -1369,7 +1717,6 @@ const ReportsScreen = () => {
       });
     }
 
-    // Add each engineer's jobs
     if (engineerReport?.length) {
       engineerReport.forEach(eng => {
         if (eng.jobs?.length) {
@@ -1401,14 +1748,13 @@ const ReportsScreen = () => {
         <View style={{ minWidth: SCREEN_WIDTH - 20, paddingBottom: 8 }}>
           {groups.map((group, groupIdx) => (
             <View key={groupIdx} style={styles.engineerGroupContainer}>
-              {/* Engineer Header - Web-like */}
+              {/* Engineer Header */}
               <View style={styles.engineerHeader}>
                 <Wrench size={14} color={COLORS.gray700} />
                 <Text style={styles.engineerHeaderText}>
                   {group.engineer}
                   <Text style={styles.engineerJobCount}>
-                    {' '}
-                    ({group.count} jobs)
+                    {' '}({group.count} jobs)
                   </Text>
                 </Text>
               </View>
@@ -1527,12 +1873,11 @@ const ReportsScreen = () => {
     );
   }, [engineerReport, noEngineerJobs, navigateToJobDetail, engineerColumns]);
 
-  // ─── Render Rebill Table with Full View Button ─────────────────────────
+  // ─── Render Rebill Table ───────────────────────────────────────────────
 
   const renderRebillTable = useCallback(() => {
     return (
       <View>
-        {/* Rebill Header with Full View Button */}
         <View style={styles.rebillHeader}>
           <View style={styles.rebillHeaderLeft}>
             <Receipt size={16} color={COLORS.blue} />
@@ -1552,7 +1897,6 @@ const ReportsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Rebill Summary Cards */}
         <View style={styles.rebillSummaryGrid}>
           <View style={[styles.rebillSummaryCard, { backgroundColor: '#eef2ff' }]}>
             <Text style={styles.rebillSummaryLabel}>Total Rebilled Jobs</Text>
@@ -1574,11 +1918,11 @@ const ReportsScreen = () => {
           </View>
         </View>
 
-        {/* Rebill Table */}
         <OptimizedTable
           columns={rebillColumns}
           data={rebillReport}
           onPress={navigateToJobDetail}
+          showTotal={false}
         />
       </View>
     );
@@ -1599,13 +1943,7 @@ const ReportsScreen = () => {
       case 'engineer':
         return renderEngineerGroupedReport();
       case 'value':
-        return (
-          <OptimizedTable
-            columns={valueColumns}
-            data={valueReport}
-            grandTotal={valueReportTotal}
-          />
-        );
+        return renderValueReport();
       case 'spare':
         return (
           <OptimizedTable
@@ -1622,37 +1960,20 @@ const ReportsScreen = () => {
             onPress={navigateToJobDetail}
           />
         );
+      case 'received':
+        return renderReceivedReport();
+      case 'dailyDelivered':
+        return renderDailyReport('delivered');
+      case 'dailyRepaired':
+        return renderDailyReport('repaired');
+      case 'repairPending':
+        return renderPendingReport('repairPending');
+      case 'deliveryPending':
+        return renderPendingReport('deliveryPending');
+      case 'deliveredNRNA':
+        return renderNRNAReport();
       case 'rebill':
         return renderRebillTable();
-      case 'dailyReceived':
-      case 'dailyDelivered':
-      case 'dailyRepaired':
-        return (
-          <OptimizedTable
-            columns={dailyColumns}
-            data={dailySummary}
-            grandTotal={dailySummary.reduce((s, i) => s + safeNum(i.count), 0)}
-            totalLabel="Total Days"
-          />
-        );
-      case 'repairPending':
-      case 'deliveryPending':
-        return (
-          <OptimizedTable
-            columns={pendingColumns}
-            data={pendingReport}
-            onPress={navigateToJobDetail}
-          />
-        );
-      case 'deliveredNRNA':
-        return (
-          <OptimizedTable
-            columns={dailyColumns}
-            data={deliveredNRNA}
-            grandTotal={deliveredNRNA.reduce((s, i) => s + safeNum(i.count), 0)}
-            totalLabel="Total NR/NA"
-          />
-        );
       default:
         return (
           <OptimizedTable
@@ -1668,6 +1989,12 @@ const ReportsScreen = () => {
     filteredList,
     navigateToJobDetail,
     renderEngineerGroupedReport,
+    renderValueReport,
+    renderReceivedReport,
+    renderDailyReport,
+    renderPendingReport,
+    renderNRNAReport,
+    renderRebillTable,
     valueColumns,
     valueReport,
     valueReportTotal,
@@ -1676,9 +2003,11 @@ const ReportsScreen = () => {
     spareReportTotal,
     dealerColumns,
     dealerReport,
-    renderRebillTable,
-    dailyColumns,
+    receivedColumns,
+    deliveredColumns,
+    repairedColumns,
     dailySummary,
+    dailyTotal,
     pendingColumns,
     pendingReport,
     deliveredNRNA,
@@ -1720,12 +2049,6 @@ const ReportsScreen = () => {
           scrollEventThrottle={16}
         >
           <View style={styles.contentContainer}>
-            {/* Header */}
-            {/* <View style={styles.headerContainer}>
-              <Text style={styles.headerTitle}>📊 Report Dashboard</Text>
-              <Text style={styles.headerSubtitle}>Track and analyze service reports</Text>
-            </View> */}
-
             {/* Summary Cards */}
             <SummaryCards stats={countStats} />
 
@@ -1865,7 +2188,7 @@ const ReportsScreen = () => {
                       style={styles.applyButton}
                       onPress={handleApplyFilter}
                     >
-                      <Text style={styles.applyButtonText}>Apply</Text>
+                      <Text style={styles.applyButtonText}>Load Report</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.resetButton}
@@ -1882,7 +2205,7 @@ const ReportsScreen = () => {
                 onPress={handleExportToExcel}
               >
                 <Download size={14} color={COLORS.success} />
-                <Text style={styles.excelButtonText}>Export Excel</Text>
+                <Text style={styles.excelButtonText}>Print / Download</Text>
               </TouchableOpacity>
             </View>
 
@@ -1938,11 +2261,7 @@ const ReportsScreen = () => {
           mode="date"
           onConfirm={date => {
             setShowFromPicker(false);
-            const d = `${date.getDate().toString().padStart(2, '0')}/${(
-              date.getMonth() + 1
-            )
-              .toString()
-              .padStart(2, '0')}/${date.getFullYear()}`;
+            const d = formatDateInput(date);
             updateFilter('fromDate', d);
           }}
           onCancel={() => setShowFromPicker(false)}
@@ -1954,11 +2273,7 @@ const ReportsScreen = () => {
           mode="date"
           onConfirm={date => {
             setShowToPicker(false);
-            const d = `${date.getDate().toString().padStart(2, '0')}/${(
-              date.getMonth() + 1
-            )
-              .toString()
-              .padStart(2, '0')}/${date.getFullYear()}`;
+            const d = formatDateInput(date);
             updateFilter('toDate', d);
           }}
           onCancel={() => setShowToPicker(false)}
@@ -1985,22 +2300,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 30,
     paddingTop: 8,
-  },
-
-  // Header
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.gray900,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: COLORS.gray500,
-    marginTop: 2,
   },
 
   // Summary Cards
@@ -2293,6 +2592,54 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
+  // Report Header
+  reportHeaderContainer: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray200,
+    backgroundColor: '#fafafa',
+  },
+  reportHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray800,
+  },
+  reportHeaderSubtitle: {
+    fontSize: 11,
+    color: COLORS.gray500,
+    marginTop: 2,
+  },
+  totalDaysContainer: {
+    marginTop: 4,
+  },
+  totalDaysLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.gray600,
+  },
+  totalRecordsContainer: {
+    marginTop: 4,
+  },
+  totalRecordsLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.gray600,
+  },
+  totalTextContainer: {
+    padding: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.gray200,
+  },
+  totalText: {
+    fontSize: 13,
+    color: COLORS.gray600,
+  },
+  totalTextBold: {
+    fontWeight: '700',
+    color: COLORS.gray800,
+  },
+
   // Table Styles
   tableWrapper: {
     flex: 1,
@@ -2306,9 +2653,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerRow: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#f8f9fa',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.primary,
+    borderBottomColor: '#dee2e6',
+    minHeight: 40,
   },
   rowEven: {
     backgroundColor: COLORS.white,
@@ -2318,20 +2666,19 @@ const styles = StyleSheet.create({
   },
 
   tableHeaderCellContainer: {
-    paddingHorizontal: 6,
-    paddingVertical: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    minHeight: 36,
+    minHeight: 40,
   },
   tableHeaderCell: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.white,
-    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#495057',
+    textAlign: 'left',
   },
   tableCellContainer: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 7,
     justifyContent: 'center',
     minHeight: 34,
@@ -2355,6 +2702,61 @@ const styles = StyleSheet.create({
   statusChipText: {
     fontSize: 8,
     fontWeight: '500',
+  },
+
+  // Sub Total Styles (for Value Report)
+  subTotalContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#dee2e6',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  subTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subTotalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#212529',
+  },
+  subTotalValues: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  subTotalValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#495057',
+    minWidth: 70,
+    textAlign: 'right',
+  },
+  subTotalBold: {
+    fontWeight: '700',
+    color: '#212529',
+  },
+
+  // Grand Total
+  grandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: COLORS.primaryLight,
+    borderTopWidth: 1,
+    borderTopColor: '#fecaca',
+  },
+  grandTotalLabel: {
+    fontWeight: '700',
+    fontSize: 12,
+    color: COLORS.gray800,
+  },
+  grandTotalValue: {
+    fontWeight: '700',
+    fontSize: 13,
+    color: COLORS.primary,
   },
 
   // Engineer Group Styles
@@ -2472,27 +2874,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Grand Total
-  grandTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: COLORS.primaryLight,
-    borderTopWidth: 1,
-    borderTopColor: '#fecaca',
-  },
-  grandTotalLabel: {
-    fontWeight: '700',
-    fontSize: 12,
-    color: COLORS.gray800,
-  },
-  grandTotalValue: {
-    fontWeight: '700',
-    fontSize: 13,
-    color: COLORS.primary,
-  },
-
   // Empty State
   emptyContainer: {
     alignItems: 'center',
@@ -2524,4 +2905,3 @@ const styles = StyleSheet.create({
 });
 
 export default ReportsScreen;
-

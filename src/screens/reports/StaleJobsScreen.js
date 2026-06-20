@@ -11,39 +11,42 @@ import {
   Alert,
   Modal,
   RefreshControl,
+  StatusBar,
+  SafeAreaView,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertCircle,
   AlertOctagon,
   AlertTriangle,
   Info,
-  RefreshCw,
   Clock,
   Eye,
   Shuffle,
   X,
-  ChevronDown,
-  ChevronUp,
   Wrench,
   Smartphone,
   ClipboardList,
   Users,
   ArrowLeft,
+  Filter,
+  Calendar,
+  User,
+  Package,
 } from 'lucide-react-native';
 import { fetchStaleJobs } from '../../store/slices/staleJobsSlice';
 import api from '../../utils/api';
 
-const COLORS = {
-  primary: '#dc2626',
-  gray500: '#64748b',
-  gray600: '#475569',
-};
+const { width } = Dimensions.get('window');
 
 const StaleJobsScreen = () => {
   const dispatch = useDispatch();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { jobs = [], loading = false } = useSelector(state => state.staleJobs || {});
   
   const [days, setDays] = useState(3);
@@ -54,6 +57,7 @@ const StaleJobsScreen = () => {
   const [engineerList, setEngineerList] = useState([]);
   const [transferLoading, setTransferLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
     loadStaleJobs();
@@ -61,13 +65,17 @@ const StaleJobsScreen = () => {
   }, [days]);
 
   const loadStaleJobs = async () => {
-    await dispatch(fetchStaleJobs({ days }));
+    try {
+      await dispatch(fetchStaleJobs({ days }));
+    } catch (error) {
+      console.error('Error loading stale jobs:', error);
+    }
   };
 
   const loadEngineers = async () => {
     try {
       const response = await api.getEngineers();
-      setEngineerList(response);
+      setEngineerList(response || []);
     } catch (error) {
       console.error('Error loading engineers:', error);
     }
@@ -108,103 +116,210 @@ const StaleJobsScreen = () => {
     });
   };
 
+  const getFilteredJobs = () => {
+    if (filterType === 'critical') {
+      return jobs.filter(j => j.staleDays >= 7);
+    } else if (filterType === 'warning') {
+      return jobs.filter(j => j.staleDays >= 3 && j.staleDays < 7);
+    }
+    return jobs;
+  };
+
   const getUrgencyStyle = (daysCount) => {
-    if (daysCount >= 7) return { borderColor: '#ef4444', bg: '#fee2e2', textColor: '#991b1b', label: 'Critical', icon: AlertOctagon };
-    if (daysCount >= 3) return { borderColor: '#f59e0b', bg: '#fef3c7', textColor: '#92400e', label: 'Warning', icon: AlertTriangle };
-    return { borderColor: '#3b82f6', bg: '#dbeafe', textColor: '#1e40af', label: 'Attention', icon: Info };
+    if (daysCount >= 7) {
+      return { 
+        borderColor: '#ef4444', 
+        bg: '#fef2f2', 
+        textColor: '#dc2626', 
+        label: 'Critical', 
+        icon: AlertOctagon,
+        progressColor: '#ef4444',
+      };
+    }
+    if (daysCount >= 3) {
+      return { 
+        borderColor: '#f59e0b', 
+        bg: '#fffbeb', 
+        textColor: '#d97706', 
+        label: 'Warning', 
+        icon: AlertTriangle,
+        progressColor: '#f59e0b',
+      };
+    }
+    return { 
+      borderColor: '#3b82f6', 
+      bg: '#eff6ff', 
+      textColor: '#2563eb', 
+      label: 'Attention', 
+      icon: Info,
+      progressColor: '#3b82f6',
+    };
   };
 
   const getStatusBadgeStyle = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'received': return { bg: '#E1F5EE', text: '#0F6E56' };
-      case 'pending': return { bg: '#FAEEDA', text: '#854F0B' };
-      case 'repairing': return { bg: '#F3E8FF', text: '#6D28D9' };
-      case 'repaired': return { bg: '#E6F1FB', text: '#185FA5' };
-      case 'delivered': return { bg: '#EAF3DE', text: '#3B6D11' };
-      default: return { bg: '#F1EFE8', text: '#5F5E5A' };
-    }
+    const statusMap = {
+      'received': { bg: '#d1fae5', text: '#065f46' },
+      'pending': { bg: '#fef3c7', text: '#92400e' },
+      'repairing': { bg: '#ede9fe', text: '#5b21b6' },
+      'repaired': { bg: '#dbeafe', text: '#1e40af' },
+      'delivered': { bg: '#d1fae5', text: '#065f46' },
+      'cancelled': { bg: '#fee2e2', text: '#991b1b' },
+    };
+    return statusMap[status?.toLowerCase()] || { bg: '#f1f5f9', text: '#475569' };
   };
 
+  const handleFilterToggle = () => {
+    const types = ['all', 'critical', 'warning'];
+    const currentIndex = types.indexOf(filterType);
+    const nextIndex = (currentIndex + 1) % types.length;
+    setFilterType(types[nextIndex]);
+  };
+
+  const getFilterLabel = () => {
+    const labels = {
+      'all': 'All',
+      'critical': 'Critical',
+      'warning': 'Warning'
+    };
+    return labels[filterType] || 'All';
+  };
+
+  const filteredJobs = getFilteredJobs();
+  const criticalCount = jobs.filter(j => j.staleDays >= 7).length;
+  const warningCount = jobs.filter(j => j.staleDays >= 3 && j.staleDays < 7).length;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
         >
           <ArrowLeft size={24} color="#1e293b" />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <AlertCircle size={20} color="#f59e0b" />
-          <Text style={styles.headerTitle}>Stale Jobs</Text>
+        
+        <View style={styles.headerCenter}>
+          <View style={styles.headerTitleContainer}>
+            <AlertCircle size={22} color="#dc2626" />
+            <Text style={styles.headerTitle}>Stale Jobs</Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={styles.daysSelector}
-            onPress={() => {
-              // const newDays = days === 3 ? 7 : days === 7 ? 14 : 3;
-              const newDays = days === 1 ? 3 : days === 3 ? 5 : days === 5 ? 7 : 1;
-              setDays(newDays);
-            }}
-          >
-            <Text style={styles.daysSelectorText}>{days}+ days</Text>
-          </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={handleFilterToggle}
+          activeOpacity={0.7}
+        >
+          <Filter size={20} color="#64748b" />
+          {filterType !== 'all' && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>
+                {filterType === 'critical' ? 'C' : 'W'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Days Selector */}
+      <View style={styles.daysSelectorContainer}>
+        <Calendar size={16} color="#64748b" />
+        <Text style={styles.daysSelectorLabel}>Threshold:</Text>
+        <View style={styles.daysOptions}>
+          {[1, 3, 5, 7, 14].map((day) => (
+            <TouchableOpacity
+              key={day}
+              style={[
+                styles.dayOption,
+                days === day && styles.dayOptionActive
+              ]}
+              onPress={() => setDays(day)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.dayOptionText,
+                days === day && styles.dayOptionTextActive
+              ]}>
+                {day}d
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
       {/* Summary Cards */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.summaryScroll}
-        contentContainerStyle={styles.summaryContainer}
-      >
+      <View style={styles.summaryContainer}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryCardValue}>{jobs.length}</Text>
-          <Text style={styles.summaryCardLabel}>Total Stale Jobs</Text>
+          <Text style={styles.summaryCardLabel}>Total</Text>
         </View>
         <View style={[styles.summaryCard, styles.summaryCardCritical]}>
-          <Text style={styles.summaryCardValue}>
-            {jobs.filter(j => j.staleDays >= 7).length}
-          </Text>
-          <Text style={styles.summaryCardLabel}>Critical (7+ days)</Text>
+          <Text style={styles.summaryCardValueCritical}>{criticalCount}</Text>
+          <Text style={styles.summaryCardLabelCritical}>Critical</Text>
         </View>
         <View style={[styles.summaryCard, styles.summaryCardWarning]}>
-          <Text style={styles.summaryCardValue}>
-            {jobs.filter(j => j.staleDays >= 3 && j.staleDays < 7).length}
-          </Text>
-          <Text style={styles.summaryCardLabel}>Warning (3-6 days)</Text>
+          <Text style={styles.summaryCardValueWarning}>{warningCount}</Text>
+          <Text style={styles.summaryCardLabelWarning}>Warning</Text>
         </View>
-      </ScrollView>
+        <TouchableOpacity 
+          style={[styles.summaryCard, styles.summaryCardFilter]}
+          onPress={handleFilterToggle}
+          activeOpacity={0.7}
+        >
+          <Filter size={20} color="#64748b" />
+          <Text style={styles.summaryCardLabel}>{getFilterLabel()}</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Jobs List */}
       <ScrollView
         style={styles.jobsList}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[COLORS.primary]} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={handleRefresh} 
+            colors={['#dc2626']}
+            tintColor="#dc2626"
+          />
         }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#f59e0b" />
+            <ActivityIndicator size="large" color="#dc2626" />
             <Text style={styles.loadingText}>Loading stale jobs...</Text>
           </View>
-        ) : jobs.length === 0 ? (
+        ) : filteredJobs.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <AlertCircle size={48} color="#cbd5e1" />
+            <AlertCircle size={64} color="#cbd5e1" />
             <Text style={styles.emptyText}>No stale jobs found</Text>
-            <Text style={styles.emptySubText}>All jobs are within the {days}+ day threshold</Text>
+            <Text style={styles.emptySubText}>
+              {filterType === 'all' 
+                ? `All jobs are within the ${days}+ day threshold` 
+                : `No ${filterType} jobs found with ${days}+ days`}
+            </Text>
+            {filterType !== 'all' && (
+              <TouchableOpacity 
+                style={styles.resetFilterButton}
+                onPress={() => setFilterType('all')}
+              >
+                <Text style={styles.resetFilterText}>View all jobs</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
-          jobs.map((job) => {
+          filteredJobs.map((job, index) => {
             const urgency = getUrgencyStyle(job.staleDays);
             const UrgencyIcon = urgency.icon;
             const progress = Math.min((job.staleDays / 30) * 100, 100);
             const statusStyle = getStatusBadgeStyle(job.status);
             
             return (
-              <View key={job._id} style={[styles.jobCard, { borderLeftColor: urgency.borderColor }]}>
+              <View key={job._id || index} style={[styles.jobCard, { borderLeftColor: urgency.borderColor }]}>
                 <TouchableOpacity 
                   style={styles.jobContent}
                   onPress={() => navigateToJobDetail(job._id)}
@@ -223,18 +338,21 @@ const StaleJobsScreen = () => {
                     <View style={[styles.daysBadge, { backgroundColor: urgency.bg }]}>
                       <Clock size={12} color={urgency.textColor} />
                       <Text style={[styles.daysText, { color: urgency.textColor }]}>
-                        {job.staleDays} days
+                        {job.staleDays}d
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={styles.customerName} numberOfLines={1}>
-                    {job.customerName || job.customer?.name || 'Unknown Customer'}
-                  </Text>
+                  <View style={styles.customerContainer}>
+                    <User size={14} color="#64748b" />
+                    <Text style={styles.customerName} numberOfLines={1}>
+                      {job.customerName || job.customer?.name || 'Unknown Customer'}
+                    </Text>
+                  </View>
                   
                   <View style={styles.deviceInfo}>
                     <View style={styles.deviceTextContainer}>
-                      <Smartphone size={12} color="#64748b" />
+                      <Smartphone size={14} color="#64748b" />
                       <Text style={styles.deviceText} numberOfLines={1}>
                         {job.make} {job.model}
                       </Text>
@@ -255,98 +373,148 @@ const StaleJobsScreen = () => {
 
                   <View style={styles.progressContainer}>
                     <View style={styles.progressBar}>
-                      <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: urgency.borderColor }]} />
+                      <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: urgency.progressColor }]} />
                     </View>
-                    <Text style={styles.progressText}>Stale Progress</Text>
+                    <Text style={styles.progressText}>{Math.round(progress)}%</Text>
                   </View>
                 </TouchableOpacity>
 
                 <View style={styles.actionButtons}>
                   <TouchableOpacity 
-                    style={styles.viewButton}
+                    style={[styles.actionButton, styles.viewButton]}
                     onPress={() => navigateToJobDetail(job._id)}
+                    activeOpacity={0.7}
                   >
                     <Eye size={16} color="#3b82f6" />
-                    <Text style={styles.viewButtonText}>View Details</Text>
+                    <Text style={styles.viewButtonText}>View</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.transferButton}
+                    style={[styles.actionButton, styles.transferButton]}
                     onPress={() => {
                       setSelectedJob(job);
                       setShowTransferModal(true);
                     }}
+                    activeOpacity={0.7}
                   >
                     <Shuffle size={16} color="#f59e0b" />
-                    <Text style={styles.transferButtonText}>Transfer Job</Text>
+                    <Text style={styles.transferButtonText}>Transfer</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             );
           })
         )}
+        
+        {/* Bottom spacer */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Transfer Modal */}
-      <Modal visible={showTransferModal} transparent animationType="slide">
+      <Modal 
+        visible={showTransferModal} 
+        transparent 
+        animationType="slide"
+        onRequestClose={() => {
+          setShowTransferModal(false);
+          setSelectedJob(null);
+          setTransferTo('');
+          setTransferNote('');
+        }}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { marginTop: insets.top > 0 ? insets.top : 20 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Transfer Job</Text>
-              <TouchableOpacity onPress={() => setShowTransferModal(false)}>
-                <X size={22} color="#64748b" />
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowTransferModal(false);
+                  setSelectedJob(null);
+                  setTransferTo('');
+                  setTransferNote('');
+                }}
+                activeOpacity={0.7}
+              >
+                <X size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.transferJobInfoCard}>
-              <Text style={styles.transferJobLabel}>Job Sheet No:</Text>
-              <Text style={styles.transferJobValue}>{selectedJob?.jobSheetNo}</Text>
-              <Text style={styles.transferJobLabel}>Customer:</Text>
-              <Text style={styles.transferJobValue}>
-                {selectedJob?.customerName || selectedJob?.customer?.name || 'Unknown'}
-              </Text>
-            </View>
-
-            <Text style={styles.transferLabel}>Transfer to:</Text>
-            <ScrollView style={styles.transferSelect} nestedScrollEnabled>
-              <TouchableOpacity
-                style={[styles.transferOption, styles.transferOptionRow, transferTo === 'Reception' && styles.transferOptionActive]}
-                onPress={() => setTransferTo('Reception')}
-              >
-                <ClipboardList size={16} color={transferTo === 'Reception' ? '#dc2626' : '#1e293b'} />
-                <Text style={[styles.transferOptionText, transferTo === 'Reception' && styles.transferOptionSelected]}>
-                  Reception
-                </Text>
-              </TouchableOpacity>
-              
-              <View style={styles.divider} />
-              <View style={styles.transferSectionHeader}>
-                <Users size={14} color="#64748b" />
-                <Text style={styles.transferSectionHeaderText}>Engineers</Text>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.transferJobInfoCard}>
+                <View style={styles.transferInfoRow}>
+                  <Text style={styles.transferJobLabel}>Job Sheet:</Text>
+                  <Text style={styles.transferJobValue}>{selectedJob?.jobSheetNo}</Text>
+                </View>
+                <View style={styles.transferInfoRow}>
+                  <Text style={styles.transferJobLabel}>Customer:</Text>
+                  <Text style={styles.transferJobValue}>
+                    {selectedJob?.customerName || selectedJob?.customer?.name || 'Unknown'}
+                  </Text>
+                </View>
+                <View style={styles.transferInfoRow}>
+                  <Text style={styles.transferJobLabel}>Device:</Text>
+                  <Text style={styles.transferJobValue}>
+                    {selectedJob?.make} {selectedJob?.model}
+                  </Text>
+                </View>
+                <View style={styles.transferInfoRow}>
+                  <Text style={styles.transferJobLabel}>Status:</Text>
+                  <Text style={styles.transferJobValue}>{selectedJob?.status || 'Pending'}</Text>
+                </View>
               </View>
-              {engineerList.map((eng, idx) => (
+
+              <Text style={styles.transferLabel}>Transfer to:</Text>
+              <View style={styles.transferSelect}>
                 <TouchableOpacity
-                  key={idx}
-                  style={[styles.transferOption, styles.transferOptionRow, transferTo === eng.name && styles.transferOptionActive]}
-                  onPress={() => setTransferTo(eng.name)}
+                  style={[styles.transferOption, transferTo === 'Reception' && styles.transferOptionActive]}
+                  onPress={() => setTransferTo('Reception')}
+                  activeOpacity={0.7}
                 >
-                  <Wrench size={16} color={transferTo === eng.name ? '#dc2626' : '#1e293b'} />
-                  <Text style={[styles.transferOptionText, transferTo === eng.name && styles.transferOptionSelected]}>
-                    {eng.name}
+                  <ClipboardList size={18} color={transferTo === 'Reception' ? '#dc2626' : '#475569'} />
+                  <Text style={[styles.transferOptionText, transferTo === 'Reception' && styles.transferOptionSelected]}>
+                    Reception
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.transferSectionHeader}>
+                  <Users size={14} color="#64748b" />
+                  <Text style={styles.transferSectionHeaderText}>Engineers</Text>
+                </View>
+                
+                {engineerList.length === 0 ? (
+                  <View style={styles.transferEmpty}>
+                    <Text style={styles.transferEmptyText}>No engineers available</Text>
+                  </View>
+                ) : (
+                  engineerList.map((eng, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.transferOption, transferTo === eng.name && styles.transferOptionActive]}
+                      onPress={() => setTransferTo(eng.name)}
+                      activeOpacity={0.7}
+                    >
+                      <Wrench size={18} color={transferTo === eng.name ? '#dc2626' : '#475569'} />
+                      <Text style={[styles.transferOptionText, transferTo === eng.name && styles.transferOptionSelected]}>
+                        {eng.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
 
-            <Text style={styles.transferLabel}>Transfer Note (optional):</Text>
-            <TextInput
-              style={styles.transferNoteInput}
-              placeholder="Add reason for transfer or additional notes..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={3}
-              value={transferNote}
-              onChangeText={setTransferNote}
-            />
+              <Text style={styles.transferLabel}>Transfer Note (optional):</Text>
+              <TextInput
+                style={styles.transferNoteInput}
+                placeholder="Add reason for transfer..."
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+                value={transferNote}
+                onChangeText={setTransferNote}
+                textAlignVertical="top"
+              />
+            </ScrollView>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -357,18 +525,24 @@ const StaleJobsScreen = () => {
                   setTransferTo('');
                   setTransferNote('');
                 }}
+                activeOpacity={0.7}
               >
                 <Text style={styles.modalButtonCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonTransfer, transferLoading && styles.modalButtonDisabled]}
+                style={[
+                  styles.modalButton, 
+                  styles.modalButtonTransfer, 
+                  transferLoading && styles.modalButtonDisabled
+                ]}
                 onPress={handleTransfer}
                 disabled={transferLoading}
+                activeOpacity={0.7}
               >
                 {transferLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.modalButtonConfirmText}>Transfer Job</Text>
+                  <Text style={styles.modalButtonConfirmText}>Transfer</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -389,13 +563,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
   },
   backButton: {
     padding: 4,
+    width: 40,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -403,59 +582,138 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1e293b',
   },
-  headerRight: {},
-  daysSelector: {
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  filterButton: {
+    padding: 4,
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#dc2626',
     borderRadius: 8,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#fcd34d',
+    borderColor: '#ffffff',
   },
-  daysSelectorText: {
-    fontSize: 12,
+  filterBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  daysSelectorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 8,
+  },
+  daysSelectorLabel: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#92400e',
+    color: '#475569',
   },
-  summaryScroll: {
-    flexGrow: 0,
-    paddingVertical: 12,
+  daysOptions: {
+    flexDirection: 'row',
+    gap: 6,
+    flex: 1,
+  },
+  dayOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    minWidth: 36,
+    alignItems: 'center',
+  },
+  dayOptionActive: {
+    backgroundColor: '#dc2626',
+  },
+  dayOptionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  dayOptionTextActive: {
+    color: '#ffffff',
   },
   summaryContainer: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
-    gap: 12,
+    paddingVertical: 12,
+    gap: 10,
   },
   summaryCard: {
+    flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 12,
-    minWidth: 120,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    minWidth: 70,
   },
   summaryCardCritical: {
     backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
   },
   summaryCardWarning: {
     backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  summaryCardFilter: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
   },
   summaryCardValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1e293b',
   },
+  summaryCardValueCritical: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  summaryCardValueWarning: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#d97706',
+  },
   summaryCardLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748b',
-    marginTop: 4,
+    marginTop: 2,
+  },
+  summaryCardLabelCritical: {
+    fontSize: 10,
+    color: '#dc2626',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  summaryCardLabelWarning: {
+    fontSize: 10,
+    color: '#d97706',
+    marginTop: 2,
+    fontWeight: '600',
   },
   jobsList: {
     flex: 1,
@@ -475,17 +733,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
+    paddingHorizontal: 20,
     gap: 12,
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#64748b',
   },
   emptySubText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#94a3b8',
     textAlign: 'center',
+  },
+  resetFilterButton: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#dc2626',
+    borderRadius: 8,
+  },
+  resetFilterText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   jobCard: {
     backgroundColor: '#ffffff',
@@ -496,8 +767,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
     elevation: 2,
   },
   jobContent: {
@@ -507,7 +778,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   jobTitle: {
     flexDirection: 'row',
@@ -518,14 +789,14 @@ const styles = StyleSheet.create({
   jobNo: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#3b82f6',
+    color: '#2563eb',
   },
   urgencyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
   },
   urgencyText: {
@@ -536,7 +807,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
     gap: 4,
   },
@@ -544,17 +815,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  customerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
   customerName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 8,
+    flex: 1,
   },
   deviceInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   deviceTextContainer: {
     flexDirection: 'row',
@@ -563,25 +840,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deviceText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#64748b',
     flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   assignedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 2,
+    marginBottom: 8,
   },
   assignedTo: {
     fontSize: 12,
@@ -591,7 +868,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 10,
+    marginTop: 8,
   },
   progressBar: {
     flex: 1,
@@ -605,42 +882,43 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   progressText: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#64748b',
-    fontWeight: '500',
+    fontWeight: '600',
+    minWidth: 40,
+    textAlign: 'right',
   },
   actionButtons: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
-  viewButton: {
+  actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    gap: 8,
-    backgroundColor: '#eff6ff',
+    gap: 6,
+  },
+  viewButton: {
+    backgroundColor: '#f8fafc',
   },
   viewButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#3b82f6',
   },
   transferButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: '#fffbeb',
+    backgroundColor: '#f8fafc',
   },
   transferButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#f59e0b',
+  },
+  bottomSpacer: {
+    height: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -651,7 +929,7 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
-    width: '90%',
+    width: width * 0.92,
     maxHeight: '85%',
     overflow: 'hidden',
   },
@@ -664,35 +942,43 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1e293b',
+  },
+  modalBody: {
+    maxHeight: 500,
   },
   transferJobInfoCard: {
     backgroundColor: '#f8fafc',
     margin: 16,
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  transferInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
   transferJobLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#64748b',
-    marginBottom: 2,
   },
   transferJobValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 8,
+    flex: 1,
+    textAlign: 'right',
   },
   transferLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#475569',
     fontWeight: '600',
     marginBottom: 8,
-    marginTop: 8,
+    marginTop: 4,
     paddingHorizontal: 16,
   },
   transferSelect: {
@@ -700,16 +986,15 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 12,
     marginHorizontal: 16,
-    maxHeight: 250,
+    maxHeight: 200,
     backgroundColor: '#ffffff',
   },
   transferOption: {
-    padding: 14,
-  },
-  transferOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    padding: 12,
+    paddingHorizontal: 14,
   },
   transferOptionActive: {
     backgroundColor: '#fef2f2',
@@ -725,13 +1010,14 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#e2e8f0',
-    marginVertical: 4,
+    marginHorizontal: 12,
   },
   transferSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    padding: 12,
+    padding: 10,
+    paddingHorizontal: 14,
     backgroundColor: '#f8fafc',
   },
   transferSectionHeaderText: {
@@ -739,12 +1025,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748b',
   },
+  transferEmpty: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  transferEmptyText: {
+    fontSize: 13,
+    color: '#94a3b8',
+  },
   transferNoteInput: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 12,
-    fontSize: 13,
+    padding: 14,
+    fontSize: 14,
     marginHorizontal: 16,
     marginBottom: 16,
     textAlignVertical: 'top',
@@ -760,7 +1054,7 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
   },
@@ -770,7 +1064,7 @@ const styles = StyleSheet.create({
   modalButtonCancelText: {
     color: '#475569',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 15,
   },
   modalButtonTransfer: {
     backgroundColor: '#dc2626',
@@ -778,7 +1072,7 @@ const styles = StyleSheet.create({
   modalButtonConfirmText: {
     color: '#ffffff',
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 15,
   },
   modalButtonDisabled: {
     backgroundColor: '#94a3b8',
