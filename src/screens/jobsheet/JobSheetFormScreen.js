@@ -154,43 +154,22 @@ const getCurrentDate = () => {
 const onlyNumbers = value => value.replace(/\D/g, '');
 
 // ─── Financial Calculation Helpers ──────────────────────────────────────────
-
-/**
- * Calculate estimate and margin based on business rules:
- * - Estimate = Service Charge + (Spare Charge OR Spare Items Total)
- * - Margin = Service Charge
- */
 const calculateFinancials = (serviceCharges, spareCharges, spareItems) => {
   const service = parseFloat(serviceCharges) || 0;
   const spare = parseFloat(spareCharges) || 0;
   
-  // Calculate total from spare items
   const itemsTotal = (spareItems || []).reduce(
     (sum, item) => sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
     0
   );
   
-  // Business Rule: Use spareCharges if manually entered, otherwise use itemsTotal
   const totalSpare = spare > 0 ? spare : itemsTotal;
-  
-  // Estimate = Service + Spare (single OR total of items)
   const estimate = service + totalSpare;
-  
-  // Margin = Service Charge (as per business rule)
   const margin = service;
   
-  return {
-    estimate,
-    margin,
-    service,
-    totalSpare,
-    itemsTotal
-  };
+  return { estimate, margin, service, totalSpare, itemsTotal };
 };
 
-/**
- * Calculate advance total from items
- */
 const calculateAdvanceTotal = (advanceItems) => {
   return (advanceItems || []).reduce(
     (sum, item) => sum + (parseFloat(item.amount) || 0),
@@ -238,39 +217,6 @@ const JobSheetSchema = yup.object().shape({
   marginAmount: yup.string().nullable(),
   instaFollowers: yup.string().nullable(),
   googleReview: yup.string().nullable(),
-  // Add validation for advance amount consistency
-  advanceAmount: yup
-    .number()
-    .nullable()
-    .test(
-      'advance-consistency',
-      'Advance amount doesn\'t match total of advance items',
-      function(value) {
-        const items = this.parent.advanceItems || [];
-        if (items.length === 0) return true;
-        const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const amount = parseFloat(value) || 0;
-        return Math.abs(total - amount) < 0.01;
-      }
-    ),
-  // Add validation for spare charges consistency
-  spareCharges: yup
-    .number()
-    .nullable()
-    .test(
-      'spare-consistency',
-      'Spare charges don\'t match total of spare items',
-      function(value) {
-        const items = this.parent.spareItems || [];
-        if (items.length === 0) return true;
-        const total = items.reduce(
-          (sum, item) => sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
-          0
-        );
-        const charges = parseFloat(value) || 0;
-        return Math.abs(total - charges) < 0.01;
-      }
-    ),
 });
 
 // ─── CustomerAutocomplete ──────────────────────────────────────────────────
@@ -1037,7 +983,6 @@ export default function JobSheetFormScreen() {
 
   // ─── Reset Function for New Job ──────────────────────────────────────────
   const resetForm = () => {
-    // Reset local states
     setVisualIssues(['']);
     setCustomFaults({});
     setIdProofImage(null);
@@ -1048,17 +993,12 @@ export default function JobSheetFormScreen() {
     setSearchText('');
     setSearchResults([]);
     setShowSearchModal(false);
-    
-    // Clear Redux state
     dispatch(clearCurrentJob());
-    
-    // Reset saved job ID
     savedJobIdRef.current = null;
   };
 
   // ─── Fetch Data ──────────────────────────────────────────────────────────
   useEffect(() => {
-    // If mode is 'new', clear any existing data
     if (mode === 'new') {
       resetForm();
     }
@@ -1183,12 +1123,6 @@ export default function JobSheetFormScreen() {
     toast.show('Estimate calculated', { type: 'success' });
   };
 
-  const recalculateMargin = (setFieldValue, serviceCharges, spareCharges, spareItems) => {
-    const { estimate, margin } = calculateFinancials(serviceCharges, spareCharges, spareItems);
-    setFieldValue('estimateAmount', estimate.toString());
-    setFieldValue('marginAmount', margin.toString());
-  };
-
   // ─── Search Function ─────────────────────────────────────────────────────
   const handleSearch = async () => {
     if (!searchText.trim()) {
@@ -1231,7 +1165,6 @@ export default function JobSheetFormScreen() {
       values.spareItems
     );
     
-    // Calculate advance total from items
     const advanceTotal = calculateAdvanceTotal(values.advanceItems);
     const advanceAmount = advanceTotal > 0 ? advanceTotal : (parseFloat(values.advanceAmount) || 0);
     
@@ -1720,7 +1653,6 @@ export default function JobSheetFormScreen() {
                     Service / Repair Details
                   </Text>
 
-                  {/* ── Engineer Select with workload badges ── */}
                   <EngineerSelectModal
                     engineers={engineers}
                     workloadMap={workloadMap}
@@ -1743,7 +1675,6 @@ export default function JobSheetFormScreen() {
                     placeholder="Select Drawer"
                   />
 
-                  {/* ── Service Charges and Spare Charges ── */}
                   <View style={styles.row}>
                     <View style={{ flex: 1, marginRight: SPACING.sm }}>
                       <Input
@@ -1771,7 +1702,6 @@ export default function JobSheetFormScreen() {
                         onChangeText={t => {
                           const val = onlyNumbers(t);
                           setFieldValue('spareCharges', val);
-                          // If user manually enters spare charge, clear spare items
                           if (val > 0 && (values.spareItems || []).length > 0) {
                             setFieldValue('spareItems', []);
                           }
@@ -1827,7 +1757,6 @@ export default function JobSheetFormScreen() {
                       </View>
                     </TouchableOpacity>
 
-                    {/* Display items summary */}
                     {(values.spareItems || []).length > 0 && (
                       <View style={styles.spareItemsPreview}>
                         <Text style={styles.spareItemsPreviewTitle}>
@@ -1930,7 +1859,6 @@ export default function JobSheetFormScreen() {
                       </View>
                     </TouchableOpacity>
 
-                    {/* Display advance items preview */}
                     {(values.advanceItems || []).length > 0 && (
                       <View style={styles.advanceItemsPreview}>
                         <Text style={styles.advanceItemsPreviewTitle}>
@@ -2148,7 +2076,6 @@ export default function JobSheetFormScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* ─── NEW JOB BUTTON ── */}
                     <TouchableOpacity
                       style={[styles.secondaryButton, styles.newJobBtn]}
                       onPress={handleNewJob}
@@ -2295,8 +2222,9 @@ export default function JobSheetFormScreen() {
               style={styles.previewScroll}
               showsVerticalScrollIndicator={false}
             >
+              {/* ─── Customer Details ─────────────────────────────────── */}
               <View style={styles.previewSection}>
-                <Text style={styles.previewSectionTitle}>Customer</Text>
+                <Text style={styles.previewSectionTitle}>Customer Details</Text>
                 <View style={styles.previewRow}>
                   <Text style={styles.previewLabel}>Name</Text>
                   <Text style={styles.previewValue}>
@@ -2310,15 +2238,136 @@ export default function JobSheetFormScreen() {
                   </Text>
                 </View>
                 <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Alt Contact</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.altContact || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
                   <Text style={styles.previewLabel}>Address</Text>
                   <Text style={styles.previewValue}>
                     {confirmModal.pendingValues?.address || '—'}
                   </Text>
                 </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Email</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.email || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>ID Proof</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.idProof || '—'}
+                  </Text>
+                </View>
               </View>
 
+              {/* ─── Device Details ───────────────────────────────────── */}
               <View style={styles.previewSection}>
-                <Text style={styles.previewSectionTitle}>Service</Text>
+                <Text style={styles.previewSectionTitle}>Device Details</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Make</Text>
+                  <Text style={styles.previewValue}>
+                    {makes.find(m => m.id === confirmModal.pendingValues?.makeId)?.name || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Model</Text>
+                  <Text style={styles.previewValue}>
+                    {models.find(m => m.id === confirmModal.pendingValues?.modelId)?.name || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>IMEI</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.imei || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Status</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.status || 'Received'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Warranty</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.warranty || 'No Warranty'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Pattern/PIN</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.patternPin || '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Physical Condition ───────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Physical Condition</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Conditions</Text>
+                  <Text style={[styles.previewValue, { flex: 1, textAlign: 'right' }]}>
+                    {(confirmModal.pendingValues?.physicalConditions || []).length > 0
+                      ? (confirmModal.pendingValues?.physicalConditions || []).join(', ')
+                      : '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Accessories ───────────────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Accessories Received</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Accessories</Text>
+                  <Text style={[styles.previewValue, { flex: 1, textAlign: 'right' }]}>
+                    {(confirmModal.pendingValues?.accessoriesReceived || []).length > 0
+                      ? (confirmModal.pendingValues?.accessoriesReceived || []).join(', ')
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Battery Number</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.batteryNumber || '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Service Details ───────────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Service Details</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Engineer</Text>
+                  <Text style={styles.previewValue}>
+                    {engineers.find(e => e.id === confirmModal.pendingValues?.engineerId)?.name || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Dealer</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.dealerName || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Drawer</Text>
+                  <Text style={styles.previewValue}>
+                    {drawers.find(d => d.id === confirmModal.pendingValues?.drawerId)?.name || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Service Rep</Text>
+                  <Text style={styles.previewValue}>
+                    {salesReps.find(s => s.id === confirmModal.pendingValues?.serviceRepId)?.name || '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Financial Details ─────────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Financial Details</Text>
                 <View style={styles.previewRow}>
                   <Text style={styles.previewLabel}>Service Charge</Text>
                   <Text style={styles.previewValue}>
@@ -2331,19 +2380,129 @@ export default function JobSheetFormScreen() {
                     Rs. {confirmModal.pendingValues?.spareCharges || 0}
                   </Text>
                 </View>
+                
+                {(confirmModal.pendingValues?.spareItems || []).length > 0 && (
+                  <View style={styles.previewSubSection}>
+                    <Text style={styles.previewSubLabel}>Spare Items:</Text>
+                    {(confirmModal.pendingValues?.spareItems || []).map((item, idx) => (
+                      <View key={idx} style={styles.previewSubRow}>
+                        <Text style={styles.previewSubValue}>
+                          {item.name} × {item.qty}
+                        </Text>
+                        <Text style={styles.previewSubValue}>
+                          Rs. {(item.qty * item.rate).toFixed(0)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
                 <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Estimate</Text>
-                  <Text style={styles.previewValue}>
+                  <Text style={styles.previewLabel}>Estimate Amount</Text>
+                  <Text style={[styles.previewValue, styles.previewValueHighlight]}>
                     Rs. {confirmModal.pendingValues?.estimateAmount || 0}
                   </Text>
                 </View>
                 <View style={styles.previewRow}>
                   <Text style={styles.previewLabel}>Margin</Text>
-                  <Text style={styles.previewValue}>
+                  <Text style={[styles.previewValue, styles.previewValueMargin]}>
                     Rs. {confirmModal.pendingValues?.marginAmount || 0}
                   </Text>
                 </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Payment Mode</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.paymentMode || '—'}
+                  </Text>
+                </View>
               </View>
+
+              {/* ─── Advance Details ───────────────────────────────────── */}
+              {(confirmModal.pendingValues?.advanceItems || []).length > 0 && (
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewSectionTitle}>Advance Payments</Text>
+                  {(confirmModal.pendingValues?.advanceItems || []).map((item, idx) => (
+                    <View key={idx} style={styles.previewRow}>
+                      <Text style={styles.previewLabel}>
+                        {item.label || `Payment ${idx + 1}`}
+                        {item.date ? ` (${new Date(item.date).toLocaleDateString()})` : ''}
+                      </Text>
+                      <Text style={styles.previewValue}>
+                        Rs. {item.amount || 0}
+                      </Text>
+                    </View>
+                  ))}
+                  <View style={[styles.previewRow, styles.previewTotalRow]}>
+                    <Text style={[styles.previewLabel, styles.previewTotalLabel]}>Total Advance</Text>
+                    <Text style={[styles.previewValue, styles.previewTotalValue]}>
+                      Rs. {confirmModal.pendingValues?.advanceAmount || 0}
+                    </Text>
+                  </View>
+                  <View style={[styles.previewRow, styles.previewTotalRow]}>
+                    <Text style={[styles.previewLabel, styles.previewTotalLabel]}>Pending Amount</Text>
+                    <Text style={[styles.previewValue, styles.previewPendingValue]}>
+                      Rs. {Math.max(0, (parseFloat(confirmModal.pendingValues?.estimateAmount) || 0) - (parseFloat(confirmModal.pendingValues?.advanceAmount) || 0))}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ─── Dates ────────────────────────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Dates</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Repair Date</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.repairDate
+                      ? new Date(confirmModal.pendingValues.repairDate).toLocaleDateString()
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Delivery Date</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.deliveryDate
+                      ? new Date(confirmModal.pendingValues.deliveryDate).toLocaleDateString()
+                      : 'Not Set'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Additional Info ────────────────────────────────────── */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewSectionTitle}>Additional Information</Text>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Insta Follow</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.instaFollowers || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Google Review</Text>
+                  <Text style={styles.previewValue}>
+                    {confirmModal.pendingValues?.googleReview || '—'}
+                  </Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Remarks</Text>
+                  <Text style={[styles.previewValue, { flex: 1, textAlign: 'right' }]}>
+                    {confirmModal.pendingValues?.remarks || '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* ─── Visual Inspection ──────────────────────────────────── */}
+              {(visualIssues || []).filter(Boolean).length > 0 && (
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewSectionTitle}>Visual Inspection</Text>
+                  {visualIssues.filter(Boolean).map((issue, idx) => (
+                    <View key={idx} style={styles.previewRow}>
+                      <Text style={styles.previewLabel}>Issue {idx + 1}</Text>
+                      <Text style={styles.previewValue}>{issue}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </ScrollView>
 
             <View style={styles.previewButtons}>
@@ -2561,30 +2720,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.gray700,
   },
-  readOnlyLabel: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.gray700,
-    marginBottom: SPACING.xs,
-  },
-  readOnlyBox: {
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-    borderRadius: BORDERS.radius.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    backgroundColor: COLORS.gray50,
-    height: 48,
-    justifyContent: 'center',
-  },
-  readOnlyValue: {
-    ...FONTS.regular,
-    fontSize: 14,
-    color: COLORS.gray500,
-  },
-  readOnlyFieldWrapper: {
-    marginBottom: SPACING.sm,
-  },
   readOnlyHint: {
     ...FONTS.regular,
     fontSize: 11,
@@ -2595,8 +2730,42 @@ const styles = StyleSheet.create({
   calcButton: {
     marginBottom: SPACING.md,
   },
-
-  // Financial Summary Styles
+  visualRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  customFaultInput: {
+    borderWidth: 1,
+    borderColor: COLORS.gray200,
+    borderRadius: BORDERS.radius.sm,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+    ...FONTS.regular,
+    fontSize: 14,
+    backgroundColor: COLORS.white,
+  },
+  removeVisualButton: {
+    padding: SPACING.sm,
+    marginLeft: SPACING.xs,
+  },
+  addVisualButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: BORDERS.radius.md,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.xs,
+    backgroundColor: COLORS.primaryLight,
+    gap: 6,
+  },
+  addVisualText: {
+    ...FONTS.medium,
+    fontSize: 14,
+    color: COLORS.primary,
+  },
   financialSummary: {
     backgroundColor: COLORS.gray50,
     borderRadius: BORDERS.radius.md,
@@ -2635,8 +2804,6 @@ const styles = StyleSheet.create({
   financialValueMargin: {
     color: '#16a34a',
   },
-
-  // Advance Section Styles
   advanceSection: {
     marginBottom: SPACING.md,
   },
@@ -2713,8 +2880,25 @@ const styles = StyleSheet.create({
     color: COLORS.gray400,
     marginTop: 2,
   },
-
-  // Spare Charge Styles
+  pendingSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: SPACING.md,
+    borderRadius: BORDERS.radius.md,
+    marginBottom: SPACING.md,
+  },
+  pendingLabel: {
+    ...FONTS.medium,
+    fontSize: 14,
+    color: COLORS.gray700,
+  },
+  pendingValue: {
+    ...FONTS.bold,
+    fontSize: 18,
+    color: '#D97706',
+  },
   spareChargeTrigger: {
     backgroundColor: COLORS.gray50,
     borderRadius: BORDERS.radius.md,
@@ -2788,67 +2972,6 @@ const styles = StyleSheet.create({
     color: COLORS.gray400,
     marginTop: 2,
   },
-
-  // Pending Amount Styles
-  pendingSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    padding: SPACING.md,
-    borderRadius: BORDERS.radius.md,
-    marginBottom: SPACING.md,
-  },
-  pendingLabel: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.gray700,
-  },
-  pendingValue: {
-    ...FONTS.bold,
-    fontSize: 18,
-    color: '#D97706',
-  },
-
-  // Visual Inspection Styles
-  visualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  customFaultInput: {
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-    borderRadius: BORDERS.radius.sm,
-    padding: SPACING.sm,
-    marginTop: SPACING.xs,
-    ...FONTS.regular,
-    fontSize: 14,
-    backgroundColor: COLORS.white,
-  },
-  removeVisualButton: {
-    padding: SPACING.sm,
-    marginLeft: SPACING.xs,
-  },
-  addVisualButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: BORDERS.radius.md,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.xs,
-    backgroundColor: COLORS.primaryLight,
-    gap: 6,
-  },
-  addVisualText: {
-    ...FONTS.medium,
-    fontSize: 14,
-    color: COLORS.primary,
-  },
-
-  // Action Buttons Styles
   actionContainer: {
     marginTop: SPACING.md,
     marginBottom: SPACING.lg,
@@ -2905,8 +3028,6 @@ const styles = StyleSheet.create({
     color: COLORS.gray700,
     textAlign: 'center',
   },
-
-  // Search Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -2966,8 +3087,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray500,
   },
-
-  // Preview Modal Styles
   previewOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -3031,6 +3150,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray900,
   },
+  previewSubSection: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.xs,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  previewSubLabel: {
+    ...FONTS.medium,
+    fontSize: 12,
+    color: COLORS.gray600,
+    marginBottom: 4,
+  },
+  previewSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  previewSubValue: {
+    ...FONTS.regular,
+    fontSize: 12,
+    color: COLORS.gray700,
+  },
+  previewValueHighlight: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  previewValueMargin: {
+    color: '#16a34a',
+    fontWeight: 'bold',
+  },
+  previewTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  previewTotalLabel: {
+    fontWeight: 'bold',
+    color: COLORS.gray800,
+  },
+  previewTotalValue: {
+    fontWeight: 'bold',
+    color: COLORS.gray900,
+  },
+  previewPendingValue: {
+    fontWeight: 'bold',
+    color: '#D97706',
+  },
   previewButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -3063,8 +3232,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
   },
-
-  // Alert Modal Styles
   alertOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -3126,7 +3293,7 @@ const styles = StyleSheet.create({
   },
 });
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//-----------------------------------------------------------
 
 // // src/screens/jobsheet/JobSheetFormScreen.js
 // import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -3327,6 +3494,81 @@ const styles = StyleSheet.create({
 //     0
 //   );
 // };
+
+// // ─── Validation Schema ──────────────────────────────────────────────────
+// const JobSheetSchema = yup.object().shape({
+//   customerName: yup.string().required('Customer name is required'),
+//   contact: yup
+//     .string()
+//     .required('Contact number is required')
+//     .min(10, 'Enter valid contact number')
+//     .max(10, 'Must be exactly 10 digits'),
+//   altContact: yup.string().nullable(),
+//   address: yup.string().nullable(),
+//   email: yup.string().email('Invalid email').nullable(),
+//   makeId: yup.string().nullable(),
+//   modelId: yup.string().nullable(),
+//   imei: yup.string().nullable(),
+//   warranty: yup.string().nullable(),
+//   patternPin: yup.string().nullable(),
+//   idProof: yup.string().nullable(),
+//   physicalConditions: yup.array().nullable(),
+//   accessoriesReceived: yup.array().nullable(),
+//   batteryNumber: yup.string().nullable(),
+//   engineerId: yup.string().nullable(),
+//   dealerName: yup.string().nullable(),
+//   drawerId: yup.string().nullable(),
+//   serviceRepId: yup.string().nullable(),
+//   serviceCharges: yup.string().nullable(),
+//   spareCharges: yup.string().nullable(),
+//   estimateAmount: yup.string().nullable(),
+//   paymentMode: yup.string().nullable(),
+//   repairDate: yup.date().nullable(),
+//   deliveryDate: yup.date().nullable(),
+//   remarks: yup.string().nullable(),
+//   spareItems: yup.array().nullable(),
+//   jobSheetNo: yup.string().nullable(),
+//   createdAt: yup.string().nullable(),
+//   time: yup.string().nullable(),
+//   advanceAmount: yup.string().nullable(),
+//   advanceDate: yup.date().nullable(),
+//   marginAmount: yup.string().nullable(),
+//   instaFollowers: yup.string().nullable(),
+//   googleReview: yup.string().nullable(),
+//   // Add validation for advance amount consistency
+//   advanceAmount: yup
+//     .number()
+//     .nullable()
+//     .test(
+//       'advance-consistency',
+//       'Advance amount doesn\'t match total of advance items',
+//       function(value) {
+//         const items = this.parent.advanceItems || [];
+//         if (items.length === 0) return true;
+//         const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+//         const amount = parseFloat(value) || 0;
+//         return Math.abs(total - amount) < 0.01;
+//       }
+//     ),
+//   // Add validation for spare charges consistency
+//   spareCharges: yup
+//     .number()
+//     .nullable()
+//     .test(
+//       'spare-consistency',
+//       'Spare charges don\'t match total of spare items',
+//       function(value) {
+//         const items = this.parent.spareItems || [];
+//         if (items.length === 0) return true;
+//         const total = items.reduce(
+//           (sum, item) => sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
+//           0
+//         );
+//         const charges = parseFloat(value) || 0;
+//         return Math.abs(total - charges) < 0.01;
+//       }
+//     ),
+// });
 
 // // ─── CustomerAutocomplete ──────────────────────────────────────────────────
 // const CustomerAutocomplete = ({
@@ -4046,85 +4288,6 @@ const styles = StyleSheet.create({
 //   removeText: { ...FONTS.medium, fontSize: 12, color: COLORS.danger },
 // });
 
-// // ─── Validation Schema ──────────────────────────────────────────────────
-// const JobSheetSchema = yup.object().shape({
-//   customerName: yup.string().required('Customer name is required'),
-//   contact: yup
-//     .string()
-//     .required('Contact number is required')
-//     .min(10, 'Enter valid contact number')
-//     .max(10, 'Must be exactly 10 digits'),
-//   altContact: yup.string().nullable(),
-//   address: yup.string().nullable(),
-//   email: yup.string().email('Invalid email').nullable(),
-//   makeId: yup.string().nullable(),
-//   modelId: yup.string().nullable(),
-//   imei: yup.string().nullable(),
-//   warranty: yup.string().nullable(),
-//   patternPin: yup.string().nullable(),
-//   idProof: yup.string().nullable(),
-//   physicalConditions: yup.array().nullable(),
-//   accessoriesReceived: yup.array().nullable(),
-//   batteryNumber: yup.string().nullable(),
-//   engineerId: yup.string().nullable(),
-//   dealerName: yup.string().nullable(),
-//   drawerId: yup.string().nullable(),
-//   serviceRepId: yup.string().nullable(),
-//   serviceCharges: yup.string().nullable(),
-//   spareCharges: yup.string().nullable(),
-//   estimateAmount: yup.string().nullable(),
-//   paymentMode: yup.string().nullable(),
-//   repairDate: yup.date().nullable(),
-//   deliveryDate: yup.date().nullable(),
-//   remarks: yup.string().nullable(),
-//   spareItems: yup.array().nullable(),
-//   jobSheetNo: yup.string().nullable(),
-//   createdAt: yup.string().nullable(),
-//   time: yup.string().nullable(),
-//   advanceAmount: yup.string().nullable(),
-//   advanceDate: yup.date().nullable(),
-//   marginAmount: yup.string().nullable(),
-//   instaFollowers: yup.string().nullable(),
-//   googleReview: yup.string().nullable(),
-//   // Add validation for advance amount consistency
-//   advanceAmount: yup
-//     .number()
-//     .nullable()
-//     .test(
-//       'advance-consistency',
-//       'Advance amount doesn\'t match total of advance items',
-//       function(value) {
-//         const items = this.parent.advanceItems || [];
-//         if (items.length === 0) return true; // No items, any amount is fine
-        
-//         const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-//         const amount = parseFloat(value) || 0;
-//         // Allow small floating point differences
-//         return Math.abs(total - amount) < 0.01;
-//       }
-//     ),
-//   // Add validation for spare charges consistency
-//   spareCharges: yup
-//     .number()
-//     .nullable()
-//     .test(
-//       'spare-consistency',
-//       'Spare charges don\'t match total of spare items',
-//       function(value) {
-//         const items = this.parent.spareItems || [];
-//         if (items.length === 0) return true; // No items, any amount is fine
-        
-//         const total = items.reduce(
-//           (sum, item) => sum + (parseInt(item.qty) || 0) * (parseFloat(item.rate) || 0),
-//           0
-//         );
-//         const charges = parseFloat(value) || 0;
-//         // Allow small floating point differences
-//         return Math.abs(total - charges) < 0.01;
-//       }
-//     ),
-// });
-
 // // ─── Main Screen ──────────────────────────────────────────────────────────
 // export default function JobSheetFormScreen() {
 //   const dispatch = useDispatch();
@@ -4169,8 +4332,34 @@ const styles = StyleSheet.create({
 //   const savedJobIdRef = useRef(jobId || null);
 //   const isLoading = jobLoading;
 
+//   // ─── Reset Function for New Job ──────────────────────────────────────────
+//   const resetForm = () => {
+//     // Reset local states
+//     setVisualIssues(['']);
+//     setCustomFaults({});
+//     setIdProofImage(null);
+//     setIdProofPreview(null);
+//     setSparePopupVisible(false);
+//     setAdvancePopupVisible(false);
+//     setConfirmModal({ visible: false, action: null, pendingValues: null });
+//     setSearchText('');
+//     setSearchResults([]);
+//     setShowSearchModal(false);
+    
+//     // Clear Redux state
+//     dispatch(clearCurrentJob());
+    
+//     // Reset saved job ID
+//     savedJobIdRef.current = null;
+//   };
+
 //   // ─── Fetch Data ──────────────────────────────────────────────────────────
 //   useEffect(() => {
+//     // If mode is 'new', clear any existing data
+//     if (mode === 'new') {
+//       resetForm();
+//     }
+
 //     if (!engineers.length) dispatch(fetchEngineers());
 //     if (!makes.length) dispatch(fetchMakes());
 //     if (!models.length) dispatch(fetchModels());
@@ -4187,7 +4376,7 @@ const styles = StyleSheet.create({
 //     return () => {
 //       if (mode === 'edit') dispatch(clearCurrentJob());
 //     };
-//   }, []);
+//   }, [mode, jobId]);
 
 //   const fetchWorkload = async () => {
 //     try {
@@ -4509,6 +4698,12 @@ const styles = StyleSheet.create({
 //       setIsConfirming(false);
 //       closeConfirm();
 //     }
+//   };
+
+//   // ─── Handle New Job Navigation ──────────────────────────────────────────
+//   const handleNewJob = () => {
+//     resetForm();
+//     navigation.replace('JobSheetForm', { mode: 'new' });
 //   };
 
 //   // ─── Render ──────────────────────────────────────────────────────────────
@@ -5250,6 +5445,18 @@ const styles = StyleSheet.create({
 //                       </Text>
 //                     </TouchableOpacity>
 
+//                     {/* ─── NEW JOB BUTTON ── */}
+//                     <TouchableOpacity
+//                       style={[styles.secondaryButton, styles.newJobBtn]}
+//                       onPress={handleNewJob}
+//                       disabled={buttonsDisabled}
+//                     >
+//                       <Plus size={20} color={COLORS.primary} />
+//                       <Text style={[styles.secondaryButtonText, { color: COLORS.primary }]}>
+//                         New Job
+//                       </Text>
+//                     </TouchableOpacity>
+
 //                     <TouchableOpacity
 //                       style={styles.secondaryButton}
 //                       onPress={() => navigation.navigate('Home')}
@@ -5979,6 +6186,10 @@ const styles = StyleSheet.create({
 //     ...SHADOWS.small,
 //     gap: 4,
 //   },
+//   newJobBtn: {
+//     borderColor: COLORS.primary,
+//     backgroundColor: '#EFF6FF',
+//   },
 //   estimateBtn: {
 //     borderColor: '#FDE68A',
 //   },
@@ -6211,4 +6422,3 @@ const styles = StyleSheet.create({
 //     color: '#fff',
 //   },
 // });
-
