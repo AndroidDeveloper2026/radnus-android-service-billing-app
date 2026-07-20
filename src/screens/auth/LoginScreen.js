@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from 'react-native-toast-notifications';
 import { LogIn, Mail, Lock, Smartphone } from 'lucide-react-native';
+import styles from './LoginStyle';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -106,111 +107,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#dc2626', // red-600
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#dc2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  appName: {
-    fontWeight: '700',
-    fontSize: 32,
-    color: '#1f2937',
-    letterSpacing: 0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-    letterSpacing: 0.3,
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#f3f4f6',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 18,
-    backgroundColor: '#fafafa',
-    transition: 'border-color 0.2s',
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    fontSize: 15,
-    color: '#1f2937',
-    fontWeight: '500',
-  },
-  loginButton: {
-    backgroundColor: '#dc2626', // red-600
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: '#dc2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-    marginTop: 6,
-  },
-  loginButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
-  footer: {
-    marginTop: 48,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#d1d5db',
-    letterSpacing: 0.3,
-    fontWeight: '500',
-  },
-});

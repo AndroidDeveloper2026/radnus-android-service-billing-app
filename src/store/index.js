@@ -6,6 +6,7 @@ import reportReducer from './slices/reportSlice';
 import userReducer from './slices/userSlice';
 import staleJobsReducer from './slices/staleJobsSlice';
 import engineerReducer from './slices/engineerSlice';
+import myReportReducer from './slices/myReportSlice';
 
 export const store = configureStore({
   reducer: {
@@ -15,5 +16,6 @@ export const store = configureStore({
     users: userReducer,
     staleJobs: staleJobsReducer,
     engineer: engineerReducer,
+    myReport: myReportReducer,
   },
 });
